@@ -31,18 +31,6 @@ export const CustomNeonEdge: React.FC<EdgeProps> = ({
 
   return (
     <>
-      <svg style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', width: 0, height: 0 }}>
-        <defs>
-          <filter id={`neon-glow-${id}`} x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-      </svg>
-
       {/* Ambient Neon Glow Line */}
       <path
         d={edgePath}

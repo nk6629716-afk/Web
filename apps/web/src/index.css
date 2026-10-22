@@ -36,9 +36,36 @@ body {
   background: #3e424a;
 }
 
-/* React Flow Neumorphic Canvas */
+/* React Flow Neumorphic Canvas & Node Resets */
 .react-flow__background {
   background-color: #292b30 !important;
+}
+
+/* Eliminate default white box and padding on React Flow built-in node wrappers */
+.react-flow__node,
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-group {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  width: auto !important;
+  height: auto !important;
+  color: inherit !important;
+  border-radius: 0 !important;
+}
+
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible,
+.react-flow__node-output.selected,
+.react-flow__node-output:focus,
+.react-flow__node-output:focus-visible {
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* Tactile Floating Controls */
