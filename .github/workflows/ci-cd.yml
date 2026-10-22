@@ -1,0 +1,136 @@
+name: Relay CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Type-check & Test ───────────────────────────────────────────────────
+  test:
+    name: Type-check & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck shared package
+        run: npm run typecheck --workspace=packages/shared
+
+      - name: Typecheck engine package
+        run: npm run typecheck --workspace=packages/engine
+
+      - name: Typecheck server app
+        run: npm run typecheck --workspace=apps/server
+
+      - name: Run engine unit tests
+        run: npm run test:engine
+
+      - name: Run server integration tests
+        run: npm run test:server
+
+  # ── 2. Build verification ──────────────────────────────────────────────────
+  build:
+    name: Build All Packages
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
+
+      - name: Build engine package
+        run: npm run build --workspace=packages/engine
+
+      - name: Build database package
+        run: npm run build --workspace=packages/database
+
+      - name: Build server app
+        run: npm run build --workspace=apps/server
+
+      - name: Build web app
+        run: npm run build --workspace=apps/web
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7
+
+  # ── 3. Deploy to Render (backend) ─────────────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend → Render
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -H "Content-Type: application/json" | jq .
+
+  # ── 4. Deploy to Netlify (frontend) ───────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend → Netlify
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app for production
+        run: |
+          npm run build --workspace=packages/shared
+          npm run build --workspace=packages/engine
+          npm run build --workspace=apps/web
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: apps/web/dist
+          production-branch: main
+          production-deploy: true
+          deploy-message: "Deploy from GitHub Actions — ${{ github.sha }}"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID:    ${{ secrets.NETLIFY_SITE_ID }}

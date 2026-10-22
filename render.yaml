@@ -1,0 +1,24 @@
+services:
+  # ── Backend: Express + Socket.IO API ──────────────────────────────────────
+  - type: web
+    name: relay-api
+    runtime: node
+    region: singapore          # closest to India; change to "ohio" for US East
+    plan: free                 # upgrade to "starter" ($7/mo) for always-on
+    rootDir: .
+    buildCommand: npm install && npm run build --workspace=packages/shared && npm run build --workspace=packages/engine && npm run build --workspace=packages/database && npm run build --workspace=apps/server
+    startCommand: node apps/server/dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000             # Render always uses 10000 internally
+      - key: HOST
+        value: 0.0.0.0
+      - key: FRONTEND_URL
+        sync: false              # Set manually in Render dashboard → your Netlify URL
+      - key: SUPABASE_URL
+        sync: false              # Set in Render dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false              # Set in Render dashboard — NEVER commit this

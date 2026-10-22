@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  # ── Relay API + Socket.IO ──────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: relay-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV:    production
+      PORT:        4000
+      HOST:        0.0.0.0
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      # Supabase (leave blank to use fast in-memory store for self-hosted demos)
+      SUPABASE_URL:              ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Relay Frontend (served via nginx) ─────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: relay-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
