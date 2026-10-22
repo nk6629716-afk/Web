@@ -79,11 +79,11 @@ export const Header: React.FC<HeaderProps> = ({
             {collaborators.map((c) => (
               <div
                 key={c.userId}
-                title={`${c.displayName} (Active)`}
+                title={`${c.displayName || 'Collaborator'} (Active)`}
                 className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-md border border-[#292b30]"
                 style={{ backgroundColor: c.color }}
               >
-                {c.displayName.substring(0, 2).toUpperCase()}
+                {(c.displayName || 'U').substring(0, 2).toUpperCase()}
               </div>
             ))}
           </div>

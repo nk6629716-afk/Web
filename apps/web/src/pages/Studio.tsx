@@ -390,7 +390,8 @@ export const Studio: React.FC = () => {
           // Update execution steps
           setExecution((curr) => {
             if (!curr) return null;
-            const updatedSteps = [...curr.steps.filter((s) => s.nodeId !== step.nodeId), step];
+            const existingSteps = curr.steps || [];
+            const updatedSteps = [...existingSteps.filter((s) => s.nodeId !== step.nodeId), step];
             return {
               ...curr,
               steps: updatedSteps,
@@ -401,7 +402,7 @@ export const Studio: React.FC = () => {
 
       setExecution(execResult);
       if (execResult.status === 'succeeded') {
-        showToast('success', `Workflow execution complete! ${execResult.steps.length} steps executed.`);
+        showToast('success', `Workflow execution complete! ${(execResult.steps || []).length} steps executed.`);
       } else {
         showToast('error', `Execution failed: ${execResult.error || 'Module failure'}`);
       }
@@ -437,7 +438,7 @@ export const Studio: React.FC = () => {
 
   const selectedStepResult: ExecutionStepResult | null = useMemo(() => {
     if (!selectedNodeId || !execution) return null;
-    return execution.steps.find((s) => s.nodeId === selectedNodeId) || null;
+    return (execution.steps || []).find((s) => s.nodeId === selectedNodeId) || null;
   }, [selectedNodeId, execution]);
 
   return (
