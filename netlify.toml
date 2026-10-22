@@ -7,6 +7,20 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Proxy API requests directly to Render backend
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://relay-api-bo0p.onrender.com/api/:splat"
+  status = 200
+  force  = true
+
+# Proxy Socket.IO requests directly to Render backend
+[[redirects]]
+  from   = "/socket.io/*"
+  to     = "https://relay-api-bo0p.onrender.com/socket.io/:splat"
+  status = 200
+  force  = true
+
 # SPA routing — all paths go to index.html
 [[redirects]]
   from   = "/*"

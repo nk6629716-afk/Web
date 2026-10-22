@@ -94,11 +94,25 @@ ALTER TABLE execution_steps ENABLE ROW LEVEL SECURITY;
 -- Sample open policies for development (can be restricted in production)
 DO $$
 BEGIN
+  -- Read policies
   CREATE POLICY "Public read profiles" ON profiles FOR SELECT USING (true);
   CREATE POLICY "Public read projects" ON projects FOR SELECT USING (true);
   CREATE POLICY "Public read workflows" ON workflows FOR SELECT USING (true);
   CREATE POLICY "Public read executions" ON executions FOR SELECT USING (true);
   CREATE POLICY "Public read execution_steps" ON execution_steps FOR SELECT USING (true);
+  
+  -- Write policies for development
+  CREATE POLICY "Public insert projects" ON projects FOR INSERT WITH CHECK (true);
+  CREATE POLICY "Public update projects" ON projects FOR UPDATE USING (true);
+  CREATE POLICY "Public insert workflows" ON workflows FOR INSERT WITH CHECK (true);
+  CREATE POLICY "Public update workflows" ON workflows FOR UPDATE USING (true);
+  CREATE POLICY "Public insert executions" ON executions FOR INSERT WITH CHECK (true);
+  CREATE POLICY "Public update executions" ON executions FOR UPDATE USING (true);
+  CREATE POLICY "Public insert execution_steps" ON execution_steps FOR INSERT WITH CHECK (true);
+  CREATE POLICY "Public update execution_steps" ON execution_steps FOR UPDATE USING (true);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Reload PostgREST schema cache immediately
+NOTIFY pgrst, 'reload schema';

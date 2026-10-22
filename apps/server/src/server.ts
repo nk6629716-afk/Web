@@ -48,15 +48,79 @@ export function createServer(repos = getRepositories()) {
     }
   });
 
+  // GET /api/database/status
+  app.get('/api/database/status', async (req: Request, res: Response) => {
+    try {
+      let projectsOk = false;
+      let workflowsOk = false;
+      let errorDetails: string | null = null;
+
+      try {
+        await repos.projects.list();
+        projectsOk = true;
+      } catch (err: any) {
+        errorDetails = err.message;
+      }
+
+      try {
+        await repos.workflows.getById('00000000-0000-0000-0000-000000000000');
+        workflowsOk = true;
+      } catch (err: any) {
+        if (!errorDetails) errorDetails = err.message;
+      }
+
+      const isReady = projectsOk && workflowsOk;
+
+      res.json({
+        status: isReady ? 'ready' : 'migration_required',
+        databaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        supabaseUrl: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.replace(/:\/\/.*@/, '://') : null,
+        checks: {
+          projectsTable: projectsOk,
+          workflowsTable: workflowsOk
+        },
+        migrationFile: 'database/migrations/001_initial_schema.sql',
+        reloadCommand: "NOTIFY pgrst, 'reload schema';",
+        message: isReady 
+          ? 'Database tables verified and schema cache active.' 
+          : 'Database tables not found in schema cache. Run database/migrations/001_initial_schema.sql in Supabase SQL editor and reload cache.'
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        status: 'error',
+        message: err.message
+      });
+    }
+  });
+
   // GET /api/workflows/:id
   app.get('/api/workflows/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      let workflow = await repos.workflows.getById(id);
+      let workflow: any = null;
 
-      // If demo workflow requested and not in store, supply seeded workflow
+      try {
+        workflow = await repos.workflows.getById(id);
+      } catch (err: any) {
+        if (id === SEEDED_SAMPLE_WORKFLOW.id) {
+          console.warn('Database unavailable when reading demo workflow; serving in-memory seeded workflow:', err.message);
+          res.setHeader('x-relay-db-status', 'migration-required');
+          return res.json({ 
+            workflow: SEEDED_SAMPLE_WORKFLOW,
+            _databaseNotice: 'Database schema migration required. Run database/migrations/001_initial_schema.sql in Supabase SQL editor.'
+          });
+        }
+        throw err;
+      }
+
+      // If demo workflow requested and not in store, attempt to seed, but fall back to memory
       if (!workflow && id === SEEDED_SAMPLE_WORKFLOW.id) {
-        workflow = await repos.workflows.create(SEEDED_SAMPLE_WORKFLOW);
+        try {
+          workflow = await repos.workflows.create(SEEDED_SAMPLE_WORKFLOW);
+        } catch (seedErr) {
+          console.warn('Could not persist seeded workflow into database:', seedErr);
+          workflow = SEEDED_SAMPLE_WORKFLOW;
+        }
       }
 
       if (!workflow) {
@@ -161,32 +225,69 @@ export function createServer(repos = getRepositories()) {
 
       const activeGraph = graphOverride || workflow.graph;
 
-      // 1. Create execution record
-      const execution = await repos.executions.create({
-        workflowId: id,
-        input: input || {}
-      });
+      // 1. Create execution record (with resilient fallback if DB tables not yet migrated)
+      let execution: any = null;
+      let dbPersistenceAvailable = true;
+      try {
+        execution = await repos.executions.create({
+          workflowId: id,
+          input: input || {}
+        });
+      } catch (execErr: any) {
+        console.warn('Could not record execution in database, running in memory-trace mode:', execErr.message);
+        dbPersistenceAvailable = false;
+        execution = {
+          id: `exec-transient-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          workflowId: id,
+          status: 'running',
+          input: input || {},
+          startedAt: new Date().toISOString()
+        };
+      }
 
       // 2. Run workflow through execution engine
       const summary = await runWorkflow(activeGraph, {
         executionId: execution.id,
         runtimeInput: input,
         onStepComplete: async (step) => {
-          await repos.executions.recordStep(step);
+          if (dbPersistenceAvailable) {
+            try { await repos.executions.recordStep(step); } catch {}
+          }
         },
         onStepFailed: async (step) => {
-          await repos.executions.recordStep(step);
+          if (dbPersistenceAvailable) {
+            try { await repos.executions.recordStep(step); } catch {}
+          }
         },
         onStepSkipped: async (step) => {
-          await repos.executions.recordStep(step);
+          if (dbPersistenceAvailable) {
+            try { await repos.executions.recordStep(step); } catch {}
+          }
         }
       });
 
       // 3. Update execution status in database
-      const updatedExec = await repos.executions.update(execution.id, {
-        status: summary.status,
-        finishedAt: new Date().toISOString()
-      });
+      let updatedExec = execution;
+      if (dbPersistenceAvailable) {
+        try {
+          updatedExec = await repos.executions.update(execution.id, {
+            status: summary.status,
+            finishedAt: new Date().toISOString()
+          });
+        } catch {
+          updatedExec = {
+            ...execution,
+            status: summary.status,
+            finishedAt: new Date().toISOString()
+          };
+        }
+      } else {
+        updatedExec = {
+          ...execution,
+          status: summary.status,
+          finishedAt: new Date().toISOString()
+        };
+      }
 
       res.json({
         execution: updatedExec,
@@ -203,6 +304,15 @@ export function createServer(repos = getRepositories()) {
   // Global Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.error('API Error:', err);
+    const msg = err.message || '';
+    if (msg.includes('schema cache') || msg.includes('Database schema not initialized') || msg.includes('does not exist')) {
+      return res.status(503).json({
+        code: 'DATABASE_MIGRATION_REQUIRED',
+        message: msg,
+        action: "Please execute database/migrations/001_initial_schema.sql in your Supabase SQL Editor and reload schema cache (NOTIFY pgrst, 'reload schema';)."
+      });
+    }
+
     res.status(err.status || 500).json({
       code: err.code || 'INTERNAL_SERVER_ERROR',
       message: err.message || 'An unexpected error occurred'

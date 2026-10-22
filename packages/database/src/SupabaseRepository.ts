@@ -15,6 +15,17 @@ import {
   SaveWorkflowResult 
 } from './interfaces';
 
+export function formatSupabaseError(error: any, operation: string): Error {
+  const msg = error?.message || (typeof error === 'string' ? error : 'Unknown database error');
+  if (msg.includes('Could not find the table') || msg.includes('schema cache') || msg.includes('does not exist')) {
+    return new Error(
+      `Database schema not initialized for ${operation}: ${msg}. ` +
+      `Please execute database/migrations/001_initial_schema.sql in your Supabase SQL Editor and reload the schema cache (NOTIFY pgrst, 'reload schema';).`
+    );
+  }
+  return new Error(`Failed to ${operation} in Supabase: ${msg}`);
+}
+
 export class SupabaseWorkflowRepository implements IWorkflowRepository {
   constructor(private client: SupabaseClient) {}
 
@@ -25,7 +36,14 @@ export class SupabaseWorkflowRepository implements IWorkflowRepository {
       .eq('id', id)
       .single();
 
-    if (error || !data) return null;
+    if (error) {
+      if (error.code === 'PGRST116') return null; // 0 rows returned
+      if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+        throw formatSupabaseError(error, `retrieve workflow ${id}`);
+      }
+      return null;
+    }
+    if (!data) return null;
 
     return {
       id: data.id,
@@ -51,7 +69,7 @@ export class SupabaseWorkflowRepository implements IWorkflowRepository {
       .single();
 
     if (error) {
-      throw new Error(`Failed to create workflow in Supabase: ${error.message}`);
+      throw formatSupabaseError(error, 'create workflow');
     }
 
     // Insert version 1
@@ -307,7 +325,10 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error || !data) return [];
+    if (error) {
+      throw formatSupabaseError(error, 'list projects');
+    }
+    if (!data) return [];
     return data.map((d: any) => ({
       id: d.id,
       name: d.name,
@@ -323,7 +344,11 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .eq('id', id)
       .single();
 
-    if (error || !data) return null;
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw formatSupabaseError(error, `get project ${id}`);
+    }
+    if (!data) return null;
     return {
       id: data.id,
       name: data.name,
@@ -343,7 +368,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
       .single();
 
     if (error) {
-      throw new Error(`Failed to create project in Supabase: ${error.message}`);
+      throw formatSupabaseError(error, 'create project');
     }
 
     return {

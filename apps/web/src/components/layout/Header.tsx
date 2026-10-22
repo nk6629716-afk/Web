@@ -1,8 +1,20 @@
 import React from 'react';
-import { Play, RotateCcw, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { 
+  Play, 
+  RotateCcw, 
+  ShieldCheck, 
+  Trash2, 
+  Users, 
+  Layers, 
+  Folder, 
+  Zap, 
+  FolderPlus 
+} from 'lucide-react';
 import { Collaborator } from '@relay/shared';
 import { NeumoButton } from '../ui/NeumoButton';
 import { StatusLED } from '../ui/StatusLED';
+
+export type AppView = 'studio' | 'projects' | 'integrations';
 
 interface HeaderProps {
   workflowTitle: string;
@@ -15,6 +27,10 @@ interface HeaderProps {
   onResetSample: () => void;
   onValidate: () => void;
   onClear: () => void;
+  currentView?: AppView;
+  onViewChange?: (view: AppView) => void;
+  projectName?: string;
+  onCreateProjectClick?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,13 +44,20 @@ export const Header: React.FC<HeaderProps> = ({
   onResetSample,
   onValidate,
   onClear,
+  currentView = 'studio',
+  onViewChange,
+  projectName = 'Default Workspace',
+  onCreateProjectClick,
 }) => {
   return (
-    <header className="h-16 bg-[#292b30] shadow-[0_4px_12px_rgba(0,0,0,0.35)] border-b border-white/[0.04] px-5 flex items-center justify-between z-30 select-none">
-      {/* Left: Brand & Workflow Title */}
-      <div className="flex items-center gap-4">
+    <header className="h-16 bg-[#292b30] shadow-[0_4px_12px_rgba(0,0,0,0.35)] border-b border-white/[0.04] px-5 flex items-center justify-between z-30 select-none gap-4">
+      {/* Left: Brand & Navigation Tabs */}
+      <div className="flex items-center gap-4 shrink-0">
         {/* Brand Plaque */}
-        <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#292b30] shadow-[3px_3px_6px_rgba(0,0,0,0.4),-3px_-3px_6px_rgba(255,255,255,0.08)] border border-white/[0.03]">
+        <div 
+          onClick={() => onViewChange?.('studio')}
+          className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#292b30] shadow-[3px_3px_6px_rgba(0,0,0,0.4),-3px_-3px_6px_rgba(255,255,255,0.08)] border border-white/[0.03] cursor-pointer"
+        >
           <StatusLED status="cyan" size="sm" />
           <span className="font-black text-sm tracking-widest text-slate-100 uppercase">
             RELAY
@@ -44,30 +67,84 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </div>
 
-        {/* Workflow Title Input (Recessed Well) */}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={workflowTitle}
-            onChange={(e) => onTitleChange(e.target.value)}
-            className="bg-[#24262b] text-slate-100 font-medium px-3 py-1.5 rounded-lg text-xs w-60 border border-white/[0.03] shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5),inset_-2px_-2px_5px_rgba(255,255,255,0.06)] focus:border-[#00bfff]/50 outline-none transition-all"
-            title="Click to rename workflow"
-          />
+        {/* View Switcher Pills */}
+        <div className="flex items-center p-1 rounded-xl bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-2px_-2px_4px_rgba(255,255,255,0.05)] border border-white/[0.03] gap-1">
+          <button
+            onClick={() => onViewChange?.('studio')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'studio'
+                ? 'bg-[#292b30] text-[#00bfff] shadow-[2px_2px_4px_rgba(0,0,0,0.4),-2px_-2px_4px_rgba(255,255,255,0.08)]'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Studio</span>
+          </button>
 
-          {/* Revision Pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.03] text-[11px] font-mono text-slate-400">
-            <span>REV</span>
-            <span className="text-[#00bfff] font-bold">#{revision}</span>
-          </div>
+          <button
+            onClick={() => onViewChange?.('projects')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'projects'
+                ? 'bg-[#292b30] text-[#00bfff] shadow-[2px_2px_4px_rgba(0,0,0,0.4),-2px_-2px_4px_rgba(255,255,255,0.08)]'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Folder className="w-3.5 h-3.5" />
+            <span>Projects</span>
+          </button>
 
-          {/* Status Indicator with LED */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.03]">
-            <StatusLED status={isDirty ? 'idle' : 'success'} size="sm" />
-            <span className="text-[11px] font-mono text-slate-300">
-              {isDirty ? 'UNSAVED' : 'SAVED'}
-            </span>
-          </div>
+          <button
+            onClick={() => onViewChange?.('integrations')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'integrations'
+                ? 'bg-[#292b30] text-[#00ff88] shadow-[2px_2px_4px_rgba(0,0,0,0.4),-2px_-2px_4px_rgba(255,255,255,0.08)]'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-[#00ff88]" />
+            <span>Integrations</span>
+          </button>
         </div>
+
+        {/* Global "+ New Project" Button */}
+        {onCreateProjectClick && (
+          <NeumoButton
+            onClick={onCreateProjectClick}
+            size="sm"
+            icon={<FolderPlus className="w-3.5 h-3.5 text-[#00bfff]" />}
+            title="Create a new workflow project"
+            className="text-xs font-semibold"
+          >
+            + New Project
+          </NeumoButton>
+        )}
+
+        {/* Workflow Title & Details (when in Studio mode) */}
+        {currentView === 'studio' && (
+          <div className="hidden lg:flex items-center gap-3">
+            <input
+              type="text"
+              value={workflowTitle}
+              onChange={(e) => onTitleChange(e.target.value)}
+              className="bg-[#24262b] text-slate-100 font-medium px-3 py-1.5 rounded-lg text-xs w-52 border border-white/[0.03] shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5),inset_-2px_-2px_5px_rgba(255,255,255,0.06)] focus:border-[#00bfff]/50 outline-none transition-all truncate"
+              title="Click to rename workflow"
+            />
+
+            {/* Revision Pill */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.03] text-[11px] font-mono text-slate-400">
+              <span>REV</span>
+              <span className="text-[#00bfff] font-bold">#{revision}</span>
+            </div>
+
+            {/* Status Indicator with LED */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.03]">
+              <StatusLED status={isDirty ? 'idle' : 'success'} size="sm" />
+              <span className="text-[11px] font-mono text-slate-300">
+                {isDirty ? 'UNSAVED' : 'SAVED'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Controls */}

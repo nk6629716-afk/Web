@@ -1,4 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+export function formatSupabaseError(error, operation) {
+    const msg = error?.message || (typeof error === 'string' ? error : 'Unknown database error');
+    if (msg.includes('Could not find the table') || msg.includes('schema cache') || msg.includes('does not exist')) {
+        return new Error(`Database schema not initialized for ${operation}: ${msg}. ` +
+            `Please execute database/migrations/001_initial_schema.sql in your Supabase SQL Editor and reload the schema cache (NOTIFY pgrst, 'reload schema';).`);
+    }
+    return new Error(`Failed to ${operation} in Supabase: ${msg}`);
+}
 export class SupabaseWorkflowRepository {
     client;
     constructor(client) {
@@ -10,7 +18,15 @@ export class SupabaseWorkflowRepository {
             .select('*')
             .eq('id', id)
             .single();
-        if (error || !data)
+        if (error) {
+            if (error.code === 'PGRST116')
+                return null; // 0 rows returned
+            if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+                throw formatSupabaseError(error, `retrieve workflow ${id}`);
+            }
+            return null;
+        }
+        if (!data)
             return null;
         return {
             id: data.id,
@@ -34,7 +50,7 @@ export class SupabaseWorkflowRepository {
             .select('*')
             .single();
         if (error) {
-            throw new Error(`Failed to create workflow in Supabase: ${error.message}`);
+            throw formatSupabaseError(error, 'create workflow');
         }
         // Insert version 1
         await this.client.from('workflow_versions').insert({
@@ -270,7 +286,10 @@ export class SupabaseProjectRepository {
             .from('projects')
             .select('*')
             .order('created_at', { ascending: false });
-        if (error || !data)
+        if (error) {
+            throw formatSupabaseError(error, 'list projects');
+        }
+        if (!data)
             return [];
         return data.map((d) => ({
             id: d.id,
@@ -285,7 +304,12 @@ export class SupabaseProjectRepository {
             .select('*')
             .eq('id', id)
             .single();
-        if (error || !data)
+        if (error) {
+            if (error.code === 'PGRST116')
+                return null;
+            throw formatSupabaseError(error, `get project ${id}`);
+        }
+        if (!data)
             return null;
         return {
             id: data.id,
@@ -304,7 +328,7 @@ export class SupabaseProjectRepository {
             .select('*')
             .single();
         if (error) {
-            throw new Error(`Failed to create project in Supabase: ${error.message}`);
+            throw formatSupabaseError(error, 'create project');
         }
         return {
             id: inserted.id,

@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
 import { IExecutionRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
+export declare function formatSupabaseError(error: any, operation: string): Error;
 export declare class SupabaseWorkflowRepository implements IWorkflowRepository {
     private client;
     constructor(client: SupabaseClient);

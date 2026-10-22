@@ -18,7 +18,9 @@ import {
 } from '@relay/shared';
 import { SAMPLE_WORKFLOW } from '../lib/sampleWorkflow';
 import { executeWorkflow, validateGraph } from '../lib/localEngine';
-import { Header } from '../components/layout/Header';
+import { Header, AppView } from '../components/layout/Header';
+import { ProjectsView } from '../components/ProjectsView';
+import { IntegrationsView } from '../components/IntegrationsView';
 import { NodePalette } from '../components/layout/NodePalette';
 import { WorkflowCanvas } from '../components/WorkflowCanvas';
 import { InspectorPanel } from '../components/layout/InspectorPanel';
@@ -47,7 +49,23 @@ const INITIAL_COLLABORATORS: Collaborator[] = [
   },
 ];
 
-export const Studio: React.FC = () => {
+export interface StudioProps {
+  currentView?: AppView;
+  onViewChange?: (view: AppView) => void;
+  activeProjectId?: string;
+  activeProjectName?: string;
+  onSelectProject?: (projectId: string, projectName: string) => void;
+  onCreateProjectClick?: () => void;
+}
+
+export const Studio: React.FC<StudioProps> = ({
+  currentView = 'studio',
+  onViewChange,
+  activeProjectId = 'demo-project-001',
+  activeProjectName = 'Default Workspace',
+  onSelectProject,
+  onCreateProjectClick,
+}) => {
   const [workflow, setWorkflow] = useState<Workflow>(SAMPLE_WORKFLOW);
   const [workflowTitle, setWorkflowTitle] = useState(SAMPLE_WORKFLOW.name);
   const [revision, setRevision] = useState(SAMPLE_WORKFLOW.revision);
@@ -477,46 +495,72 @@ export const Studio: React.FC = () => {
         onResetSample={handleResetSample}
         onValidate={handleValidate}
         onClear={handleClear}
+        currentView={currentView}
+        onViewChange={onViewChange}
+        projectName={activeProjectName}
+        onCreateProjectClick={onCreateProjectClick}
       />
 
-      {/* Main Studio 3-Column Work Area */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Module Palette */}
-        <NodePalette onAddNode={handleAddNode} />
+      {/* View 1: Studio Canvas & Workflow Builder */}
+      {currentView === 'studio' && (
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* Left Module Palette */}
+          <NodePalette onAddNode={handleAddNode} />
 
-        {/* Center Recessed Canvas Space */}
-        <main className="flex-1 h-full relative">
-          <ReactFlowProvider>
-            <WorkflowCanvas
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={handleConnect}
-              onNodeClick={handleNodeClick}
-              onPaneClick={handlePaneClick}
-              onDropNode={handleDropNode}
-            />
-          </ReactFlowProvider>
-        </main>
+          {/* Center Recessed Canvas Space */}
+          <main className="flex-1 h-full relative">
+            <ReactFlowProvider>
+              <WorkflowCanvas
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={handleConnect}
+                onNodeClick={handleNodeClick}
+                onPaneClick={handlePaneClick}
+                onDropNode={handleDropNode}
+              />
+            </ReactFlowProvider>
+          </main>
 
-        {/* Bottom Execution Telemetry Drawer */}
-        <ExecutionConsole
-          execution={execution}
-          isRunning={isRunning}
-          onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
+          {/* Bottom Execution Telemetry Drawer */}
+          <ExecutionConsole
+            execution={execution}
+            isRunning={isRunning}
+            onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
+          />
+
+          {/* Right Inspector Panel */}
+          <InspectorPanel
+            selectedNode={selectedNode}
+            selectedStepResult={selectedStepResult}
+            onUpdateNodeData={handleUpdateNodeData}
+            onDeleteNode={handleDeleteNode}
+            totalNodes={nodes.length}
+            totalEdges={edges.length}
+          />
+        </div>
+      )}
+
+      {/* View 2: Projects Dashboard */}
+      {currentView === 'projects' && (
+        <ProjectsView
+          activeProjectId={activeProjectId}
+          onSelectProject={(id, name) => {
+            onSelectProject?.(id, name);
+            onViewChange?.('studio');
+          }}
+          onOpenIntegrations={() => onViewChange?.('integrations')}
         />
+      )}
 
-        {/* Right Inspector Panel */}
-        <InspectorPanel
-          selectedNode={selectedNode}
-          selectedStepResult={selectedStepResult}
-          onUpdateNodeData={handleUpdateNodeData}
-          onDeleteNode={handleDeleteNode}
-          totalNodes={nodes.length}
-          totalEdges={edges.length}
+      {/* View 3: External App Integrations Hub (CivicConnect) */}
+      {currentView === 'integrations' && (
+        <IntegrationsView
+          currentWorkflowId={workflow.id}
+          onOpenStudio={() => onViewChange?.('studio')}
         />
-      </div>
+      )}
     </div>
   );
 };
