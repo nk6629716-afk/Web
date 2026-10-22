@@ -1,119 +1,102 @@
 import React from 'react';
 import { NodeType } from '@relay/shared';
-import { Zap, Cpu, GitBranch, Send, Plus, Info } from 'lucide-react';
+import { Zap, Cpu, GitFork, Send, Plus } from 'lucide-react';
 
 interface NodePaletteProps {
   onAddNode: (type: NodeType) => void;
 }
 
-interface PaletteItem {
+const PALETTE_ITEMS: Array<{
   type: NodeType;
-  title: string;
+  label: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  accentColor: string;
-  badgeBg: string;
-  badgeBorder: string;
-}
-
-const PALETTE_ITEMS: PaletteItem[] = [
+  icon: React.ReactNode;
+  colorClass: string;
+}> = [
   {
     type: 'trigger',
-    title: 'Trigger',
-    description: 'Entry point with payload or simulated webhook input.',
-    icon: Zap,
-    accentColor: 'text-emerald-400',
-    badgeBg: 'bg-emerald-500/10 text-emerald-400',
-    badgeBorder: 'border-emerald-500/30 hover:border-emerald-500/60',
+    label: 'Trigger',
+    description: 'Entry event payload',
+    icon: <Zap className="w-4 h-4 text-amber-400" />,
+    colorClass: 'border-amber-500/30 hover:border-amber-500/60 bg-amber-950/20'
   },
   {
     type: 'transform',
-    title: 'Transform',
-    description: 'String manipulation, lowercase, trim, or template resolution.',
-    icon: Cpu,
-    accentColor: 'text-violet-400',
-    badgeBg: 'bg-violet-500/10 text-violet-400',
-    badgeBorder: 'border-violet-500/30 hover:border-violet-500/60',
+    label: 'Transform',
+    description: 'Safe data modifier',
+    icon: <Cpu className="w-4 h-4 text-sky-400" />,
+    colorClass: 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20'
   },
   {
     type: 'condition',
-    title: 'Condition',
-    description: 'Binary decision node with True and False output branches.',
-    icon: GitBranch,
-    accentColor: 'text-amber-400',
-    badgeBg: 'bg-amber-500/10 text-amber-400',
-    badgeBorder: 'border-amber-500/30 hover:border-amber-500/60',
+    label: 'Condition',
+    description: 'True / False branch router',
+    icon: <GitFork className="w-4 h-4 text-violet-400" />,
+    colorClass: 'border-violet-500/30 hover:border-violet-500/60 bg-violet-950/20'
   },
   {
     type: 'output',
-    title: 'Output',
-    description: 'Final execution terminal displaying aggregated results.',
-    icon: Send,
-    accentColor: 'text-sky-400',
-    badgeBg: 'bg-sky-500/10 text-sky-400',
-    badgeBorder: 'border-sky-500/30 hover:border-sky-500/60',
-  },
+    label: 'Output',
+    description: 'Terminal destination',
+    icon: <Send className="w-4 h-4 text-emerald-400" />,
+    colorClass: 'border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-950/20'
+  }
 ];
 
 export const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
   const onDragStart = (event: React.DragEvent, nodeType: NodeType) => {
-    event.dataTransfer.setData('application/reactflow', nodeType);
+    event.dataTransfer.setData('application/reactflow/type', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 
   return (
-    <aside className="w-64 border-r border-white/10 bg-[#0d121f]/90 backdrop-blur-md flex flex-col z-20 select-none">
-      <div className="p-4 border-b border-white/10">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-          Node Library
+    <aside className="w-60 border-r border-slate-800 bg-slate-950/90 backdrop-blur-md p-3.5 flex flex-col gap-4 select-none z-10">
+      <div>
+        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+          Node Palette
         </h3>
-        <p className="text-[11px] text-slate-500 mt-0.5">
-          Drag to canvas or click to insert
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Drag onto canvas or click (+) to insert a node.
         </p>
       </div>
 
-      <div className="p-3 space-y-2.5 flex-1 overflow-y-auto">
-        {PALETTE_ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.type}
-              draggable
-              onDragStart={(e) => onDragStart(e, item.type)}
-              onClick={() => onAddNode(item.type)}
-              className={`group p-3 rounded-xl bg-slate-900/50 hover:bg-slate-800/60 border ${item.badgeBorder} cursor-grab active:cursor-grabbing transition-all duration-150 shadow-sm hover:shadow-md hover:scale-[1.01]`}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg bg-white/5 ${item.accentColor}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-semibold text-slate-100 group-hover:text-white">
-                    {item.title}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  title="Click to add"
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-white/10 hover:bg-white/20 text-slate-300 transition-opacity"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+      <div className="flex flex-col gap-2.5">
+        {PALETTE_ITEMS.map((item) => (
+          <div
+            key={item.type}
+            draggable
+            onDragStart={(e) => onDragStart(e, item.type)}
+            onClick={() => onAddNode(item.type)}
+            className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-md ${item.colorClass}`}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-md bg-slate-900 border border-slate-800">
+                {item.icon}
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                {item.description}
-              </p>
+              <div>
+                <h4 className="text-xs font-medium text-slate-200 group-hover:text-white">
+                  {item.label}
+                </h4>
+                <p className="text-[10px] text-slate-400">
+                  {item.description}
+                </p>
+              </div>
             </div>
-          );
-        })}
+
+            <button
+              type="button"
+              className="p-1 rounded bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+              title={`Add ${item.label}`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
       </div>
 
-      {/* Footer Info Tips */}
-      <div className="p-3 border-t border-white/10 bg-black/20 text-[11px] text-slate-400 flex items-start gap-2">
-        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-        <span>
-          Connect condition handles to create branched workflows. Press <kbd className="px-1 py-0.5 bg-slate-800 rounded border border-white/10 text-[10px] text-slate-300">Backspace</kbd> to delete.
-        </span>
+      <div className="mt-auto p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 leading-normal">
+        <span className="font-semibold text-slate-300 block mb-1">💡 Realtime Sync</span>
+        Edits are saved with revision checks and broadcast to all connected peer tabs.
       </div>
     </aside>
   );

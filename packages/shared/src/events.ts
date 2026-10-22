@@ -1,10 +1,12 @@
-import { Collaborator, ExecutionStepResult, Workflow, WorkflowGraph } from './types.js';
+import { Collaborator, ExecutionStep, RelayGraph, Workflow } from './types';
 
 export interface RoomJoinPayload {
   workflowId: string;
   user: {
-    userId: string;
-    displayName: string;
+    id?: string;
+    userId?: string;
+    name?: string;
+    displayName?: string;
     avatarUrl?: string;
   };
 }
@@ -18,18 +20,19 @@ export interface RoomJoinedPayload {
 export interface WorkflowUpdatePayload {
   workflowId: string;
   expectedRevision: number;
-  graph: WorkflowGraph;
+  graph: RelayGraph;
   name?: string;
+  updatedBy?: string;
 }
 
 export interface WorkflowSyncPayload {
-  workflowId: string;
   workflow: Workflow;
+  workflowId?: string;
   reason?: 'conflict_rejected' | 'initial_sync' | 'peer_update';
 }
 
 export interface PresenceUpdatePayload {
-  workflowId: string;
+  workflowId?: string;
   collaborators: Collaborator[];
 }
 
@@ -40,41 +43,48 @@ export interface PresenceHeartbeatPayload {
 
 export interface ExecutionStartPayload {
   workflowId: string;
+  triggerInput?: any;
   input?: Record<string, unknown>;
 }
 
 export interface ExecutionEventPayload {
   executionId: string;
   workflowId: string;
-  step: ExecutionStepResult;
+  step: ExecutionStep;
+  totalSteps?: number;
 }
 
 export interface ExecutionCompletePayload {
   executionId: string;
   workflowId: string;
   status: 'succeeded' | 'failed';
-  totalDurationMs: number;
-  steps: ExecutionStepResult[];
+  finalOutputs?: Record<string, any>;
+  durationMs?: number;
+  totalDurationMs?: number;
+  steps?: ExecutionStep[];
   error?: string;
 }
 
 export interface SocketErrorPayload {
   code: string;
   message: string;
-  details?: unknown;
+  canonicalWorkflow?: Workflow;
+  details?: any;
 }
 
 export interface ClientToServerEvents {
   'room:join': (payload: RoomJoinPayload) => void;
-  'room:leave': (payload: { workflowId: string }) => void;
+  'room:leave'?: (payload: { workflowId: string }) => void;
   'workflow:update': (payload: WorkflowUpdatePayload) => void;
-  'presence:heartbeat': (payload: PresenceHeartbeatPayload) => void;
+  'presence:select'?: (payload: { workflowId: string; userId: string; nodeId?: string }) => void;
+  'presence:heartbeat'?: (payload: PresenceHeartbeatPayload) => void;
   'execution:start': (payload: ExecutionStartPayload) => void;
 }
 
 export interface ServerToClientEvents {
-  'room:joined': (payload: RoomJoinedPayload) => void;
+  'room:joined'?: (payload: RoomJoinedPayload) => void;
   'workflow:sync': (payload: WorkflowSyncPayload) => void;
+  'workflow:updated'?: (payload: { workflow: Workflow; updatedBy: string }) => void;
   'presence:update': (payload: PresenceUpdatePayload) => void;
   'execution:event': (payload: ExecutionEventPayload) => void;
   'execution:complete': (payload: ExecutionCompletePayload) => void;

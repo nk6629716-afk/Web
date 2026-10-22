@@ -1,140 +1,142 @@
 import React from 'react';
-import { Play, RotateCcw, CheckCircle, AlertTriangle, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { Collaborator } from '@relay/shared';
+import { Play, Loader2, Check, Cloud, Users, Workflow as WorkflowIcon } from 'lucide-react';
+import clsx from 'clsx';
 
 interface TopNavProps {
-  workflowTitle: string;
-  onTitleChange: (title: string) => void;
+  workflowName: string;
   revision: number;
-  isDirty: boolean;
-  isRunning: boolean;
   collaborators: Collaborator[];
-  onRun: () => void;
-  onResetSample: () => void;
-  onValidate: () => void;
-  onClear: () => void;
+  isSaving: boolean;
+  hasUnsavedChanges: boolean;
+  isRunning: boolean;
+  isConnected: boolean;
+  onRunWorkflow: () => void;
+  onSaveWorkflow: () => void;
+  onNameChange?: (name: string) => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
-  workflowTitle,
-  onTitleChange,
+  workflowName,
   revision,
-  isDirty,
-  isRunning,
   collaborators,
-  onRun,
-  onResetSample,
-  onValidate,
-  onClear,
+  isSaving,
+  hasUnsavedChanges,
+  isRunning,
+  isConnected,
+  onRunWorkflow,
+  onSaveWorkflow,
+  onNameChange
 }) => {
   return (
-    <header className="h-14 border-b border-white/10 bg-[#0d121f]/95 backdrop-blur-md px-4 flex items-center justify-between z-30 select-none">
-      {/* Left: Brand & Workflow Title */}
+    <header className="h-14 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md px-4 flex items-center justify-between z-20 select-none">
+      {/* Brand & Workflow Title */}
       <div className="flex items-center gap-3">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-2 pr-3 border-r border-white/10">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <span className="font-black text-white text-base tracking-tighter">⚡</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-white tracking-wide leading-tight">RELAY</span>
-            <span className="text-[10px] text-blue-400 font-medium leading-none">Studio v1.0</span>
-          </div>
-        </div>
-
-        {/* Workflow Title Input */}
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={workflowTitle}
-            onChange={(e) => onTitleChange(e.target.value)}
-            className="bg-transparent hover:bg-white/5 focus:bg-white/10 px-2.5 py-1 rounded-md text-sm font-medium text-slate-100 border border-transparent focus:border-blue-500/50 outline-none transition-all w-64 truncate"
-            title="Click to rename workflow"
-          />
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/80 border border-white/5 text-[11px] font-mono text-slate-400">
-            <span>Rev</span>
-            <span className="text-blue-400 font-semibold">#{revision}</span>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
+            <WorkflowIcon className="w-4 h-4 text-white" />
           </div>
-
-          {/* Dirty/Saved Indicator */}
-          {isDirty ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>Unsaved changes</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400">
-              <CheckCircle className="w-3 h-3" />
-              <span>Saved</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right: Presence & Actions */}
-      <div className="flex items-center gap-2.5">
-        {/* Collaborators */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/60 border border-white/5">
-          <Users className="w-3.5 h-3.5 text-slate-400" />
-          <div className="flex -space-x-1.5 overflow-hidden">
-            {collaborators.map((c) => (
-              <div
-                key={c.userId}
-                title={`${c.displayName} (Active)`}
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-[#0d121f] shadow"
-                style={{ backgroundColor: c.color }}
-              >
-                {c.displayName.substring(0, 2).toUpperCase()}
-              </div>
-            ))}
-          </div>
-          <span className="text-xs text-slate-400 font-medium pl-1">
-            {collaborators.length} online
+          <span className="font-bold text-sm tracking-wide bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+            RELAY
           </span>
         </div>
 
-        {/* Validation Button */}
-        <button
-          onClick={onValidate}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-xs font-medium text-slate-200 hover:text-white transition-all shadow-sm"
-          title="Validate graph structure and cycle rules"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Validate</span>
-        </button>
+        <div className="h-4 w-[1px] bg-slate-800 mx-1" />
 
-        {/* Reset Sample Button */}
-        <button
-          onClick={onResetSample}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-xs font-medium text-slate-200 hover:text-white transition-all shadow-sm"
-          title="Reload the seeded demo onboarding workflow"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
-          <span>Reset Sample</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={workflowName}
+            onChange={(e) => onNameChange?.(e.target.value)}
+            className="bg-transparent text-sm font-medium text-slate-200 hover:bg-slate-900 focus:bg-slate-900 px-2 py-1 rounded transition-colors border border-transparent focus:border-slate-700 outline-none max-w-[260px] truncate"
+            title="Click to rename workflow"
+          />
 
-        {/* Clear Button */}
-        <button
-          onClick={onClear}
-          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 border border-white/10 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 transition-all shadow-sm"
-          title="Clear canvas"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+          <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+            v{revision}
+          </span>
 
-        {/* Primary Run Workflow Button */}
+          <span className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 bg-sky-950/70 border border-sky-800/60 px-2 py-0.5 rounded-full">
+            Demo Studio
+          </span>
+        </div>
+      </div>
+
+      {/* Right Controls: Save, Presence, Run */}
+      <div className="flex items-center gap-3">
+        {/* Connection & Save Status */}
+        <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800">
+            <span
+              className={clsx(
+                'w-2 h-2 rounded-full',
+                isConnected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-rose-500'
+              )}
+            />
+            <span className="text-[11px] text-slate-400">
+              {isConnected ? 'Realtime Connected' : 'Disconnected'}
+            </span>
+          </div>
+
+          <div
+            onClick={onSaveWorkflow}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 cursor-pointer hover:bg-slate-850 transition-colors"
+            title="Click to manually save"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-3 h-3 text-sky-400 animate-spin" />
+                <span className="text-[11px] text-sky-400">Saving...</span>
+              </>
+            ) : hasUnsavedChanges ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-[11px] text-amber-400">Unsaved Changes</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span className="text-[11px] text-slate-300">Saved</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Collaborators Presence Avatars */}
+        {collaborators.length > 0 && (
+          <div className="flex items-center -space-x-1.5 px-2 py-1 rounded-md bg-slate-900/60 border border-slate-800">
+            <Users className="w-3 h-3 text-slate-500 mr-2" />
+            {collaborators.map((c, i) => {
+              const cId = c.id || c.userId || `c-${i}`;
+              const cName = c.name || c.displayName || 'Peer';
+              return (
+                <div
+                  key={cId}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-950 border-2 border-slate-950 shadow"
+                  style={{ backgroundColor: c.color }}
+                  title={`${cName} (${cId.substring(0, 5)})`}
+                >
+                  {cName.substring(0, 2).toUpperCase()}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Run Workflow CTA */}
         <button
-          onClick={onRun}
+          onClick={onRunWorkflow}
           disabled={isRunning}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-xs transition-all shadow-lg ${
+          className={clsx(
+            'flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold shadow-lg transition-all',
             isRunning
-              ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/25 hover:shadow-blue-500/40 scale-100 hover:scale-[1.02] active:scale-[0.98]'
-          }`}
+              ? 'bg-sky-600 text-white cursor-wait opacity-90 shadow-sky-600/30'
+              : 'bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-emerald-600/30'
+          )}
         >
           {isRunning ? (
             <>
-              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>Executing...</span>
             </>
           ) : (

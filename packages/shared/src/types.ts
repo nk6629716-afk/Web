@@ -1,53 +1,66 @@
 export type NodeType = 'trigger' | 'transform' | 'condition' | 'output';
 
-export type TransformOperation =
-  | 'trim'
-  | 'lowercase'
-  | 'uppercase'
-  | 'extract_field'
-  | 'json_parse'
-  | 'template';
-
-export type ConditionOperator =
-  | 'equals'
-  | 'not_equals'
-  | 'contains'
-  | 'greater_than'
-  | 'less_than'
-  | 'is_empty'
-  | 'is_not_empty';
-
-export type NodeStatus =
-  | 'idle'
-  | 'pending'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'skipped';
+export type NodeStatus = 'idle' | 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
 
 export type ExecutionStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
 export interface TriggerConfig {
   payload?: Record<string, unknown> | string;
+  initialPayload?: Record<string, any>;
+  triggerType?: 'manual' | 'webhook' | 'schedule';
 }
+
+export type TransformOp = 
+  | 'trim' 
+  | 'lowercase' 
+  | 'uppercase' 
+  | 'json_parse' 
+  | 'json_stringify'
+  | 'extract_field' 
+  | 'template'
+  | 'math_add'
+  | 'default_value';
+
+export type TransformOperation = TransformOp;
 
 export interface TransformConfig {
-  operation: TransformOperation;
+  operation: TransformOp;
   field?: string;
+  fieldPath?: string;
   outputField?: string;
+  targetField?: string;
   template?: string;
+  operand?: number;
+  defaultValue?: any;
 }
 
+export type ConditionOp = 
+  | 'equals' 
+  | 'not_equals' 
+  | 'contains' 
+  | 'not_contains'
+  | 'greater_than' 
+  | 'less_than' 
+  | 'is_empty' 
+  | 'is_not_empty';
+
+export type ConditionOperator = ConditionOp;
+
 export interface ConditionConfig {
-  field: string;
-  operator: ConditionOperator;
-  value: string | number | boolean;
+  field?: string;
+  fieldPath?: string;
+  operator: ConditionOp;
+  value?: any;
+  targetValue?: any;
 }
 
 export interface OutputConfig {
+  destination?: 'response' | 'log' | 'webhook';
   title?: string;
+  label?: string;
   messageTemplate?: string;
   fieldsToInclude?: string[];
+  includeMetadata?: boolean;
 }
 
 export type NodeConfig =
@@ -57,46 +70,57 @@ export type NodeConfig =
   | OutputConfig
   | Record<string, unknown>;
 
-export interface WorkflowNodeData {
+export interface RelayNodeData {
   [key: string]: any;
   label: string;
-  nodeType: NodeType;
+  type?: NodeType;
+  nodeType?: NodeType;
   config: Record<string, any>;
   status?: NodeStatus;
   lastRun?: {
-    output?: unknown;
-    error?: string;
+    input?: any;
+    output?: any;
     durationMs?: number;
+    error?: string;
     executedAt?: string;
   };
 }
 
-export interface WorkflowNode {
+export type WorkflowNodeData = RelayNodeData;
+
+export interface RelayNode {
   id: string;
   type: NodeType;
   position: { x: number; y: number };
-  data: WorkflowNodeData;
+  data: RelayNodeData;
 }
 
-export interface WorkflowEdge {
+export type WorkflowNode = RelayNode;
+
+export interface RelayEdge {
   id: string;
   source: string;
   target: string;
   sourceHandle?: string | null;
   targetHandle?: string | null;
   label?: string;
+  animated?: boolean;
 }
 
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
+export type WorkflowEdge = RelayEdge;
+
+export interface RelayGraph {
+  nodes: RelayNode[];
+  edges: RelayEdge[];
 }
+
+export type WorkflowGraph = RelayGraph;
 
 export interface Workflow {
   id: string;
   projectId: string;
   name: string;
-  graph: WorkflowGraph;
+  graph: RelayGraph;
   revision: number;
   updatedAt: string;
 }
@@ -105,46 +129,54 @@ export interface WorkflowVersion {
   id: string;
   workflowId: string;
   revision: number;
-  graph: WorkflowGraph;
+  graph: RelayGraph;
   createdBy?: string;
   createdAt: string;
-}
-
-export interface ExecutionStepResult {
-  id: string;
-  executionId: string;
-  nodeId: string;
-  status: NodeStatus;
-  input?: unknown;
-  output?: unknown;
-  errorMessage?: string;
-  durationMs: number;
-}
-
-export interface Execution {
-  id: string;
-  workflowId: string;
-  status: ExecutionStatus;
-  triggeredBy?: string;
-  input?: Record<string, unknown>;
-  steps: ExecutionStepResult[];
-  startedAt: string;
-  finishedAt?: string;
-  error?: string;
 }
 
 export interface Project {
   id: string;
   name: string;
-  ownerId: string;
+  ownerId?: string;
   createdAt: string;
 }
 
+export interface ExecutionStep {
+  id: string;
+  executionId: string;
+  nodeId: string;
+  status: NodeStatus;
+  input?: any;
+  output?: any;
+  errorMessage?: string;
+  durationMs?: number;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+export type ExecutionStepResult = ExecutionStep;
+
+export interface Execution {
+  id: string;
+  workflowId: string;
+  status: 'running' | 'succeeded' | 'failed' | 'pending';
+  triggeredBy?: string;
+  input?: any;
+  steps?: ExecutionStep[];
+  startedAt: string;
+  finishedAt?: string;
+  error?: string;
+}
+
 export interface Collaborator {
-  userId: string;
-  displayName: string;
-  avatarUrl?: string;
+  id?: string;
+  userId?: string;
+  name?: string;
+  displayName?: string;
   color: string;
+  avatarUrl?: string;
+  lastActiveAt?: number;
+  lastActive?: string;
   activeNodeId?: string | null;
-  lastActive: string;
+  selectedNodeId?: string;
 }

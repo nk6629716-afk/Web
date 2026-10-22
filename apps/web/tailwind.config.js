@@ -25,6 +25,28 @@ export default {
           transform: '#8b5cf6',
           condition: '#f59e0b',
           output: '#06b6d4',
+        },
+        studio: {
+          950: '#292b30',
+          900: '#23252a',
+          850: '#25272c',
+          800: '#31343a',
+          700: '#475569',
+          600: '#64748b',
+          500: '#94a3b8',
+          400: '#cbd5e1',
+          300: '#e2e8f0',
+          200: '#f1f5f9',
+          100: '#f8fafc',
+          50: '#ffffff'
+        },
+        relay: {
+          blue: '#3b82f6',
+          cyan: '#00bfff',
+          emerald: '#00ff88',
+          amber: '#ffaa00',
+          rose: '#ff3366',
+          violet: '#8b5cf6'
         }
       },
       boxShadow: {

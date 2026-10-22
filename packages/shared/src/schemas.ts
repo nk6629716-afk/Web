@@ -1,76 +1,185 @@
-import { z } from 'zod';
+import { NodeType, RelayGraph, RelayNode, RelayEdge, TransformOp, ConditionOp } from './types';
 
-export const NodeTypeSchema = z.enum(['trigger', 'transform', 'condition', 'output']);
+export interface ValidationIssue {
+  type: 'error' | 'warning';
+  nodeId?: string;
+  edgeId?: string;
+  message: string;
+}
 
-export const TransformOperationSchema = z.enum([
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  issues: ValidationIssue[];
+}
+
+export const SUPPORTED_NODE_TYPES: NodeType[] = ['trigger', 'transform', 'condition', 'output'];
+
+export const SUPPORTED_TRANSFORM_OPS: TransformOp[] = [
   'trim',
   'lowercase',
   'uppercase',
-  'extract_field',
   'json_parse',
+  'json_stringify',
+  'extract_field',
   'template',
-]);
+  'math_add',
+  'default_value'
+];
 
-export const ConditionOperatorSchema = z.enum([
+export const SUPPORTED_CONDITION_OPS: ConditionOp[] = [
   'equals',
   'not_equals',
   'contains',
+  'not_contains',
   'greater_than',
   'less_than',
   'is_empty',
-  'is_not_empty',
-]);
+  'is_not_empty'
+];
 
-export const WorkflowNodeDataSchema = z.object({
-  label: z.string().min(1, 'Node label is required').max(100),
-  nodeType: NodeTypeSchema,
-  config: z.record(z.any()).default({}),
-  status: z.enum(['idle', 'pending', 'running', 'succeeded', 'failed', 'skipped']).optional(),
-  lastRun: z
-    .object({
-      output: z.any().optional(),
-      error: z.string().optional(),
-      durationMs: z.number().optional(),
-      executedAt: z.string().optional(),
-    })
-    .optional(),
-});
+/**
+ * Validates graph structure, edge references, node types, and basic connectivity.
+ */
+export function validateGraphStructure(graph: RelayGraph): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
-export const WorkflowNodeSchema = z.object({
-  id: z.string().min(1, 'Node id required'),
-  type: NodeTypeSchema,
-  position: z.object({
-    x: z.number(),
-    y: z.number(),
-  }),
-  data: WorkflowNodeDataSchema,
-});
+  const addError = (message: string, nodeId?: string, edgeId?: string) => {
+    errors.push(message);
+    issues.push({ type: 'error', message, nodeId, edgeId });
+  };
 
-export const WorkflowEdgeSchema = z.object({
-  id: z.string().min(1, 'Edge id required'),
-  source: z.string().min(1, 'Edge source required'),
-  target: z.string().min(1, 'Edge target required'),
-  sourceHandle: z.string().nullable().optional(),
-  targetHandle: z.string().nullable().optional(),
-  label: z.string().optional(),
-});
+  const addWarning = (message: string, nodeId?: string, edgeId?: string) => {
+    warnings.push(message);
+    issues.push({ type: 'warning', message, nodeId, edgeId });
+  };
 
-export const WorkflowGraphSchema = z.object({
-  nodes: z.array(WorkflowNodeSchema),
-  edges: z.array(WorkflowEdgeSchema),
-});
+  if (!graph || !Array.isArray(graph.nodes)) {
+    addError('Graph must contain a nodes array');
+    return { valid: false, errors, warnings, issues };
+  }
 
-export const WorkflowUpdateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  expectedRevision: z.number().int().nonnegative(),
-  graph: WorkflowGraphSchema,
-});
+  const nodeMap = new Map<string, RelayNode>();
+  const duplicateIds = new Set<string>();
 
-export const ExecutionStartSchema = z.object({
-  workflowId: z.string().min(1),
-  input: z.record(z.any()).optional(),
-});
+  // Check nodes
+  for (const node of graph.nodes) {
+    if (!node.id) {
+      addError('Node is missing required ID');
+      continue;
+    }
+    if (nodeMap.has(node.id)) {
+      duplicateIds.add(node.id);
+      addError(`Duplicate node ID detected: "${node.id}"`, node.id);
+    }
+    nodeMap.set(node.id, node);
 
-export const ProjectCreateSchema = z.object({
-  name: z.string().min(1, 'Project name required').max(100),
-});
+    if (!SUPPORTED_NODE_TYPES.includes(node.type)) {
+      addError(`Unsupported node type: "${node.type}". Supported: ${SUPPORTED_NODE_TYPES.join(', ')}`, node.id);
+    }
+
+    // Node-specific configuration checks
+    if (node.type === 'transform') {
+      const op = node.data?.config?.operation;
+      if (!op || !SUPPORTED_TRANSFORM_OPS.includes(op)) {
+        addWarning(`Transform node "${node.id}" has invalid or missing operation: "${op}"`, node.id);
+      }
+    } else if (node.type === 'condition') {
+      const op = node.data?.config?.operator;
+      if (!op || !SUPPORTED_CONDITION_OPS.includes(op)) {
+        addWarning(`Condition node "${node.id}" has invalid or missing operator: "${op}"`, node.id);
+      }
+    }
+  }
+
+  // Check triggers and outputs
+  const triggers = graph.nodes.filter(n => n.type === 'trigger');
+  const outputs = graph.nodes.filter(n => n.type === 'output');
+
+  if (triggers.length === 0) {
+    addError('Workflow must have at least one Trigger node');
+  }
+  if (outputs.length === 0) {
+    addWarning('Workflow should have at least one Output node to collect results');
+  }
+
+  // Check edges
+  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+  for (const edge of edges) {
+    if (!edge.id) {
+      addError('Edge is missing required ID');
+    }
+    if (!edge.source || !nodeMap.has(edge.source)) {
+      addError(`Edge "${edge.id}" references non-existent source node: "${edge.source}"`, undefined, edge.id);
+    }
+    if (!edge.target || !nodeMap.has(edge.target)) {
+      addError(`Edge "${edge.id}" references non-existent target node: "${edge.target}"`, undefined, edge.id);
+    }
+    if (edge.source && edge.target && edge.source === edge.target) {
+      addError(`Edge "${edge.id}" forms a self-loop on node "${edge.source}"`, edge.source, edge.id);
+    }
+
+    // Condition node edge handles check
+    const sourceNode = nodeMap.get(edge.source);
+    if (sourceNode?.type === 'condition') {
+      if (edge.sourceHandle && !['true', 'false'].includes(edge.sourceHandle)) {
+        addWarning(`Condition node edge "${edge.id}" has unusual sourceHandle: "${edge.sourceHandle}". Expected "true" or "false"`, edge.source, edge.id);
+      }
+    }
+  }
+
+  // Cycle detection via DFS
+  const adjacencyList = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    adjacencyList.set(node.id, []);
+  }
+  for (const edge of edges) {
+    if (adjacencyList.has(edge.source) && nodeMap.has(edge.target)) {
+      adjacencyList.get(edge.source)!.push(edge.target);
+    }
+  }
+
+  const visited = new Set<string>();
+  const recursionStack = new Set<string>();
+  let hasCycle = false;
+
+  function detectCycleDfs(nodeId: string, path: string[]): boolean {
+    visited.add(nodeId);
+    recursionStack.add(nodeId);
+
+    const neighbors = adjacencyList.get(nodeId) || [];
+    for (const neighbor of neighbors) {
+      if (!visited.has(neighbor)) {
+        if (detectCycleDfs(neighbor, [...path, neighbor])) {
+          return true;
+        }
+      } else if (recursionStack.has(neighbor)) {
+        const cycle = [...path, neighbor].join(' -> ');
+        addError(`Cycle detected in workflow graph: ${cycle}`, neighbor);
+        return true;
+      }
+    }
+
+    recursionStack.delete(nodeId);
+    return false;
+  }
+
+  for (const node of graph.nodes) {
+    if (!visited.has(node.id)) {
+      if (detectCycleDfs(node.id, [node.id])) {
+        hasCycle = true;
+        break;
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    issues
+  };
+}

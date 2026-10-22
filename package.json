@@ -1,19 +1,25 @@
 {
-  "name": "relay-monorepo",
+  "name": "relay-workspace",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w apps/server\" \"npm run dev -w apps/web\"",
-    "dev:server": "npm run dev -w apps/server",
-    "dev:web": "npm run dev -w apps/web",
+    "dev": "npm run dev --workspaces",
+    "dev:server": "npm --workspace=@relay/server run dev",
+    "dev:web": "npm --workspace=@relay/web run dev",
     "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces"
+    "test": "npm --workspace=@relay/engine test",
+    "test:engine": "npm --workspace=@relay/engine test"
   },
-  "devDependencies": {
-    "concurrently": "^9.1.0",
-    "typescript": "^5.6.3"
-  }
+  "keywords": [
+    "relay",
+    "workflow",
+    "collaboration",
+    "dag"
+  ],
+  "author": "",
+  "license": "MIT"
 }
