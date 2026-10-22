@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { CustomNodeShell } from './CustomNodeShell';
+import { NeumoNodeShell } from './NeumoNodeShell';
 import { WorkflowNodeData } from '@relay/shared';
 
 export const OutputNode: React.FC<NodeProps> = ({ id, data, selected }) => {
@@ -10,24 +10,25 @@ export const OutputNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   return (
     <div className="relative group">
+      {/* Left Input Port */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-3 !h-3 !bg-sky-400 !border-2 !border-slate-900 shadow-md !-left-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-[#00bfff] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-left-2"
       />
 
-      <CustomNodeShell
+      <NeumoNodeShell
         id={id}
         type="output"
         label={nodeData.label || 'Output'}
-        subtitle="Final Destination"
+        subtitle="Execution Terminal"
         status={nodeData.status}
         selected={selected}
       >
-        <div className="bg-slate-900/60 rounded px-2 py-1 font-mono text-[11px] text-sky-200 truncate border border-white/5">
+        <div className="font-mono text-[10px] text-[#00bfff] truncate">
           {title}
         </div>
-      </CustomNodeShell>
+      </NeumoNodeShell>
     </div>
   );
 };

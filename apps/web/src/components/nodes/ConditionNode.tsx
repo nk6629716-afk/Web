@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { CustomNodeShell } from './CustomNodeShell';
+import { NeumoNodeShell } from './NeumoNodeShell';
 import { WorkflowNodeData } from '@relay/shared';
 
 export const ConditionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
@@ -12,51 +12,48 @@ export const ConditionNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   return (
     <div className="relative group">
-      {/* Input Handle */}
+      {/* Left Input Port */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-slate-900 shadow-md !-left-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-slate-500 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-left-2"
       />
 
-      <CustomNodeShell
+      <NeumoNodeShell
         id={id}
         type="condition"
         label={nodeData.label || 'Condition'}
-        subtitle="Binary Branch"
+        subtitle="Binary Decision Logic"
         status={nodeData.status}
         selected={selected}
       >
-        <div className="space-y-1.5">
-          <div className="bg-slate-900/60 rounded px-2 py-1 font-mono text-[11px] text-amber-200/90 truncate border border-white/5">
+        <div className="space-y-1.5 font-mono text-[10px]">
+          <div className="text-[#ffaa00] truncate">
             {field} <span className="text-slate-400">{op}</span> "{val}"
           </div>
-          <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 font-semibold">
-            <span>Branch:</span>
-            <div className="flex items-center gap-3">
-              <span className="text-emerald-400">True ↗</span>
-              <span className="text-rose-400">False ↘</span>
-            </div>
+          <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider pt-0.5">
+            <span className="text-[#00ff88]">True ↗</span>
+            <span className="text-[#ff3366]">False ↘</span>
           </div>
         </div>
-      </CustomNodeShell>
+      </NeumoNodeShell>
 
-      {/* True Branch Handle */}
+      {/* True Output Port */}
       <Handle
         type="source"
         position={Position.Right}
         id="true"
         style={{ top: '38%' }}
-        className="!w-3 !h-3 !bg-emerald-400 !border-2 !border-slate-900 shadow-md !-right-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-[#00ff88] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-right-2"
       />
 
-      {/* False Branch Handle */}
+      {/* False Output Port */}
       <Handle
         type="source"
         position={Position.Right}
         id="false"
         style={{ top: '72%' }}
-        className="!w-3 !h-3 !bg-rose-400 !border-2 !border-slate-900 shadow-md !-right-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-[#ff3366] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-right-2"
       />
     </div>
   );

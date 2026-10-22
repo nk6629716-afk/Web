@@ -1,19 +1,17 @@
 import React, { useCallback, useRef } from 'react';
 import {
   ReactFlow,
-  Background,
   Controls,
   MiniMap,
-  BackgroundVariant,
   Connection,
   Edge,
   Node,
   OnNodesChange,
   OnEdgesChange,
-  addEdge,
   useReactFlow,
 } from '@xyflow/react';
 import { nodeTypes } from './nodes';
+import { edgeTypes } from './nodes/CustomEdges';
 import { NodeType, WorkflowNodeData } from '@relay/shared';
 
 interface WorkflowCanvasProps {
@@ -63,7 +61,16 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
   );
 
   return (
-    <div ref={reactFlowWrapper} className="w-full h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
+    <div
+      ref={reactFlowWrapper}
+      className="w-full h-full relative bg-[#292b30]"
+      style={{
+        backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.08) 1.5px, transparent 0)',
+        backgroundSize: '24px 24px',
+      }}
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -73,16 +80,16 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        defaultEdgeOptions={{
+          type: 'neon',
+          animated: false,
+        }}
         fitView
         deleteKeyCode={['Backspace', 'Delete']}
-        defaultEdgeOptions={{
-          animated: false,
-          style: { stroke: '#475569', strokeWidth: 2 },
-        }}
         minZoom={0.2}
         maxZoom={2}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#1e293b" />
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap
           position="bottom-right"
@@ -90,18 +97,18 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
             const data = n.data as unknown as WorkflowNodeData;
             switch (data?.nodeType) {
               case 'trigger':
-                return '#10b981';
+                return '#00ff88';
               case 'transform':
                 return '#8b5cf6';
               case 'condition':
-                return '#f59e0b';
+                return '#ffaa00';
               case 'output':
-                return '#06b6d4';
+                return '#00bfff';
               default:
                 return '#64748b';
             }
           }}
-          maskColor="rgba(10, 13, 20, 0.75)"
+          maskColor="rgba(36, 38, 43, 0.85)"
           className="!m-4"
         />
       </ReactFlow>

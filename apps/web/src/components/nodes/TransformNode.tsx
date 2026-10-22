@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { CustomNodeShell } from './CustomNodeShell';
+import { NeumoNodeShell } from './NeumoNodeShell';
 import { WorkflowNodeData } from '@relay/shared';
 
 export const TransformNode: React.FC<NodeProps> = ({ id, data, selected }) => {
@@ -11,13 +11,14 @@ export const TransformNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   return (
     <div className="relative group">
+      {/* Left Input Port */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-slate-900 shadow-md !-left-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-slate-500 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-left-2"
       />
 
-      <CustomNodeShell
+      <NeumoNodeShell
         id={id}
         type="transform"
         label={nodeData.label || 'Transform'}
@@ -25,16 +26,17 @@ export const TransformNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         status={nodeData.status}
         selected={selected}
       >
-        <div className="flex items-center justify-between bg-slate-900/60 rounded px-2 py-1 font-mono text-[11px] border border-white/5">
-          <span className="text-violet-300 font-semibold">{operation}</span>
+        <div className="flex items-center justify-between font-mono text-[10px]">
+          <span className="text-[#8b5cf6] font-bold uppercase">{operation}</span>
           <span className="text-slate-400 truncate max-w-[120px]">{field}</span>
         </div>
-      </CustomNodeShell>
+      </NeumoNodeShell>
 
+      {/* Right Output Port */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-3 !h-3 !bg-violet-400 !border-2 !border-slate-900 shadow-md !-right-1.5"
+        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-[#8b5cf6]/60 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-right-2"
       />
     </div>
   );

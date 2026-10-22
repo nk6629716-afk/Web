@@ -1,0 +1,114 @@
+/* Relay Neumorphic & Skeuomorphic Styling */
+
+:root {
+  --neumo-bg: #292b30;
+  --neumo-dark: rgba(0, 0, 0, 0.4);
+  --neumo-light: rgba(255, 255, 255, 0.08);
+}
+
+.neumo-surface {
+  background-color: #292b30;
+}
+
+.neumo-protrude {
+  background-color: #292b30;
+  box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.08);
+}
+
+.neumo-recess {
+  background-color: #292b30;
+  box-shadow: inset 6px 6px 12px rgba(0, 0, 0, 0.4), inset -6px -6px 12px rgba(255, 255, 255, 0.08);
+}
+
+.neumo-protrude-sm {
+  background-color: #292b30;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4), -3px -3px 6px rgba(255, 255, 255, 0.08);
+}
+
+.neumo-recess-sm {
+  background-color: #292b30;
+  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.4), inset -3px -3px 6px rgba(255, 255, 255, 0.08);
+}
+
+/* Tactile Pressable Button */
+.neumo-button {
+  background-color: #292b30;
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4), -4px -4px 8px rgba(255, 255, 255, 0.08);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.neumo-button:hover {
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.45), -5px -5px 10px rgba(255, 255, 255, 0.1);
+  filter: brightness(1.03);
+}
+
+.neumo-button:active,
+.neumo-button.active {
+  box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.5), inset -4px -4px 8px rgba(255, 255, 255, 0.08);
+  transform: translateY(1px);
+}
+
+/* Tactile Port Well */
+.neumo-port-well {
+  background-color: #25272c;
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.6), inset -2px -2px 5px rgba(255, 255, 255, 0.08);
+}
+
+/* LED Indicators */
+.led-bulb {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  position: relative;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.led-bulb::after {
+  content: '';
+  position: absolute;
+  top: 1.5px;
+  left: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.led-idle {
+  background-color: #ffaa00;
+  box-shadow: 0 0 8px rgba(255, 170, 0, 0.6), 0 0 16px rgba(255, 170, 0, 0.2);
+}
+
+.led-running,
+.led-success {
+  background-color: #00ff88;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.8), 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.led-failed,
+.led-error {
+  background-color: #ff3366;
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.8), 0 0 20px rgba(255, 51, 102, 0.3);
+}
+
+.led-cyan {
+  background-color: #00bfff;
+  box-shadow: 0 0 12px rgba(0, 191, 255, 0.9), 0 0 24px rgba(0, 191, 255, 0.4);
+}
+
+/* Custom Edge Glow Animation */
+@keyframes neon-dash {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.neon-edge-running {
+  stroke-dasharray: 6 6;
+  animation: neon-dash 0.8s linear infinite;
+}

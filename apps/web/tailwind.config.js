@@ -8,16 +8,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        studio: {
-          bg: '#0a0d14',
-          card: '#111726',
-          panel: '#0d121f',
-          surface: '#151d30',
-          border: 'rgba(255, 255, 255, 0.08)',
-          'border-hover': 'rgba(255, 255, 255, 0.16)',
-          text: '#f1f5f9',
-          muted: '#94a3b8',
-          accent: '#3b82f6',
+        surface: {
+          base: '#292b30',
+          dark: '#23252a',
+          light: '#31343a',
+          border: 'rgba(255, 255, 255, 0.05)',
+        },
+        led: {
+          idle: '#ffaa00',
+          success: '#00ff88',
+          failed: '#ff3366',
+          cyan: '#00bfff',
         },
         node: {
           trigger: '#10b981',
@@ -26,20 +27,18 @@ export default {
           output: '#06b6d4',
         }
       },
+      boxShadow: {
+        'neumo-protrude': '6px 6px 12px rgba(0, 0, 0, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.08)',
+        'neumo-recess': 'inset 6px 6px 12px rgba(0, 0, 0, 0.4), inset -6px -6px 12px rgba(255, 255, 255, 0.08)',
+        'neumo-protrude-sm': '3px 3px 6px rgba(0, 0, 0, 0.4), -3px -3px 6px rgba(255, 255, 255, 0.08)',
+        'neumo-recess-sm': 'inset 3px 3px 6px rgba(0, 0, 0, 0.4), inset -3px -3px 6px rgba(255, 255, 255, 0.08)',
+        'neumo-button': '4px 4px 8px rgba(0, 0, 0, 0.4), -4px -4px 8px rgba(255, 255, 255, 0.08)',
+        'neumo-button-active': 'inset 4px 4px 8px rgba(0, 0, 0, 0.5), inset -4px -4px 8px rgba(255, 255, 255, 0.08)',
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
       },
-      animation: {
-        'pulse-subtle': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'glow-pulse': 'glow 1.5s ease-in-out infinite alternate',
-      },
-      keyframes: {
-        glow: {
-          '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.4), 0 0 10px rgba(59, 130, 246, 0.2)' },
-          '100%': { boxShadow: '0 0 15px rgba(59, 130, 246, 0.8), 0 0 25px rgba(59, 130, 246, 0.4)' },
-        }
-      }
     },
   },
   plugins: [],
