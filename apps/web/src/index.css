@@ -106,24 +106,64 @@ body {
   box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.45), -6px -6px 12px rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Neumorphic Port Well Handle */
+/* Neumorphic Port Well Handle — enlarged for easy connections */
 .react-flow__handle {
-  width: 14px !important;
-  height: 14px !important;
+  width: 18px !important;
+  height: 18px !important;
   border-radius: 9999px !important;
   background-color: #292b30 !important;
   border: 2px solid #3c4048 !important;
   box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(255, 255, 255, 0.08) !important;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+  z-index: 10 !important;
+}
+
+/* Invisible hit-area expansion for easier grabbing */
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: transparent;
 }
 
 .react-flow__handle:hover {
-  transform: scale(1.25) !important;
+  transform: scale(1.35) !important;
   border-color: #00bfff !important;
-  box-shadow: 0 0 10px rgba(0, 191, 255, 0.8), inset 2px 2px 4px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 0 14px rgba(0, 191, 255, 0.8), inset 2px 2px 4px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* When a connection is being dragged, highlight valid target handles */
+.react-flow__handle.connectingto,
+.react-flow__handle-connecting {
+  border-color: #00bfff !important;
+  box-shadow: 0 0 18px rgba(0, 191, 255, 0.9), inset 2px 2px 4px rgba(0, 0, 0, 0.6) !important;
+  transform: scale(1.5) !important;
+}
+
+/* Connection line style while dragging */
+.react-flow__connection-path {
+  stroke: #00bfff !important;
+  stroke-width: 2.5 !important;
+  stroke-dasharray: 8 4 !important;
 }
 
 /* Ensure React Flow edge SVG paths never animate coordinate geometry on drag */
 .react-flow__edge-path {
   transition: stroke 0.2s ease, stroke-width 0.2s ease, stroke-opacity 0.2s ease !important;
+}
+
+/* Make edges clickable with pointer cursor */
+.react-flow__edge {
+  cursor: pointer !important;
+}
+
+/* Selected edge highlight */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #38d4ff !important;
+  stroke-width: 2.5px !important;
 }

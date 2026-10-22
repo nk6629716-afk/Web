@@ -85,6 +85,7 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({
           type: 'neon',
           animated: false,
         }}
+        connectionRadius={40}
         fitView
         deleteKeyCode={['Backspace', 'Delete']}
         minZoom={0.2}

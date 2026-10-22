@@ -34,7 +34,7 @@ export const TriggerNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-3.5 !h-3.5 !bg-[#292b30] !border-2 !border-[#00ff88]/60 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-right-2"
+        className="!bg-[#292b30] !border-2 !border-[#00ff88]/60 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.6)] !-right-[9px]"
       />
     </div>
   );
