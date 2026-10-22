@@ -31,14 +31,16 @@ export const CustomNeonEdge: React.FC<EdgeProps> = ({
 
   return (
     <>
-      {/* Ambient Neon Glow Line */}
+      {/* Ambient Neon Glow Line - strictly synchronous path geometry */}
       <path
         d={edgePath}
         fill="none"
         stroke="#00bfff"
         strokeWidth={selected || animated ? 6 : 4}
         strokeOpacity={selected ? 0.6 : animated ? 0.45 : 0.2}
-        className="transition-all duration-300"
+        style={{
+          transition: 'stroke-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease',
+        }}
       />
 
       {/* Core Crisp Connection Line */}
@@ -50,6 +52,7 @@ export const CustomNeonEdge: React.FC<EdgeProps> = ({
           stroke: selected ? '#38d4ff' : animated ? '#00bfff' : '#64748b',
           strokeWidth: selected ? 2.5 : 2,
           strokeDasharray: animated ? '6 6' : undefined,
+          transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
         }}
         className={animated ? 'neon-edge-running' : ''}
       />

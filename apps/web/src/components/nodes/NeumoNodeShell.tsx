@@ -68,7 +68,7 @@ export const NeumoNodeShell: React.FC<NeumoNodeShellProps> = ({
 
   return (
     <div
-      className={`relative min-w-[250px] max-w-[290px] rounded-2xl bg-[#292b30] border border-white/[0.04] transition-all duration-200 select-none ${
+      className={`relative min-w-[250px] max-w-[290px] rounded-2xl bg-[#292b30] border border-white/[0.04] transition-[box-shadow,border-color,opacity] duration-200 select-none ${
         selected
           ? 'shadow-[6px_6px_14px_rgba(0,0,0,0.5),-6px_-6px_14px_rgba(255,255,255,0.1),0_0_16px_rgba(0,191,255,0.45)] border-[#00bfff]/50'
           : isRunning

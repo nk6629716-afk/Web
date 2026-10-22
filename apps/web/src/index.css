@@ -114,11 +114,16 @@ body {
   background-color: #292b30 !important;
   border: 2px solid #3c4048 !important;
   box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(255, 255, 255, 0.08) !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
 .react-flow__handle:hover {
   transform: scale(1.25) !important;
   border-color: #00bfff !important;
   box-shadow: 0 0 10px rgba(0, 191, 255, 0.8), inset 2px 2px 4px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Ensure React Flow edge SVG paths never animate coordinate geometry on drag */
+.react-flow__edge-path {
+  transition: stroke 0.2s ease, stroke-width 0.2s ease, stroke-opacity 0.2s ease !important;
 }
