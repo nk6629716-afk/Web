@@ -12,7 +12,9 @@ export interface ConditionResult {
 
 export function evaluateCondition(node: RelayNode, inputPayload: Record<string, any>): ConditionResult {
   const config = (node.data?.config || {}) as ConditionConfig;
-  const { fieldPath, operator, targetValue } = config;
+  const fieldPath = config.fieldPath || config.field || '';
+  const operator = config.operator;
+  const targetValue = config.targetValue !== undefined ? config.targetValue : config.value;
 
   const actualValue = fieldPath ? getNestedValue(inputPayload, fieldPath) : undefined;
   let conditionMet = false;

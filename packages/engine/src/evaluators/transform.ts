@@ -54,7 +54,10 @@ export function setNestedValue(obj: Record<string, any>, path: string, value: an
  */
 export function evaluateTransform(node: RelayNode, inputPayload: Record<string, any>): TransformResult {
   const config = (node.data?.config || {}) as TransformConfig;
-  const { operation, fieldPath, targetField, template, operand, defaultValue } = config;
+  const operation = config.operation;
+  const fieldPath = config.fieldPath || config.field;
+  const targetField = config.targetField || config.outputField;
+  const { template, operand, defaultValue } = config;
 
   const targetKey = targetField || (fieldPath ? `${fieldPath}_transformed` : 'result');
   const rawValue = fieldPath ? getNestedValue(inputPayload, fieldPath) : inputPayload;

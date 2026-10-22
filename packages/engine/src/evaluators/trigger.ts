@@ -5,7 +5,7 @@ export interface TriggerResult {
 }
 
 export function evaluateTrigger(node: RelayNode, runtimeInput?: any): TriggerResult {
-  const initialPayload = node.data?.config?.initialPayload || {};
+  const initialPayload = node.data?.config?.initialPayload || node.data?.config?.payload || {};
   
   // If runtime input is provided (e.g. from execution start request), merge it with initial payload
   let outputPayload: Record<string, any> = {};
