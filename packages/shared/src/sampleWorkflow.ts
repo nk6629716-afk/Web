@@ -1,9 +1,19 @@
 import { Workflow } from './types';
 
+/**
+ * RELAY — E-Commerce Order & Refund Router
+ *
+ * Pre-seeded demo workflow:
+ *   Trigger → Transform (trim_and_lowercase) → Condition (amount > 10000)
+ *             → [true]  Output: VIP Fast-Track Approval
+ *             → [false] Output: Standard Review Queue
+ *
+ * Default payload: ORD-9912, amount: 12500, customer: "  RAHUL SHARMA  "
+ */
 export const SEEDED_SAMPLE_WORKFLOW: Workflow = {
   id: 'demo-workflow-001',
   projectId: 'demo-project-001',
-  name: 'Support Ticket Triage & Escalation',
+  name: 'E-Commerce Refund Router',
   revision: 1,
   updatedAt: new Date().toISOString(),
   graph: {
@@ -13,92 +23,61 @@ export const SEEDED_SAMPLE_WORKFLOW: Workflow = {
         type: 'trigger',
         position: { x: 80, y: 240 },
         data: {
-          label: 'Incoming Ticket Trigger',
+          label: 'Incoming Refund Request',
           type: 'trigger',
           config: {
             triggerType: 'webhook',
             initialPayload: {
-              ticketId: 'TICK-9021',
-              customer: 'Acme Cloud Corp',
-              message: '  CRITICAL: Production database replica lag is spiking!  ',
-              priority: 'critical',
-              severity: 9
+              orderId: 'ORD-9912',
+              amount: 12500,
+              customer: '  RAHUL SHARMA  ',
+              reason: 'Defective item received'
             }
           },
           status: 'idle'
         }
       },
       {
-        id: 'node-transform-clean',
+        id: 'node-transform-1',
         type: 'transform',
-        position: { x: 380, y: 240 },
+        position: { x: 400, y: 240 },
         data: {
-          label: 'Trim & Sanitize Message',
+          label: 'Sanitize Customer Name',
           type: 'transform',
           config: {
-            operation: 'trim',
-            fieldPath: 'message',
-            targetField: 'cleanMessage'
+            operation: 'trim_and_lowercase',
+            fieldPath: 'customer',
+            targetField: 'cleanCustomer'
           },
           status: 'idle'
         }
       },
       {
-        id: 'node-condition-priority',
+        id: 'node-condition-1',
         type: 'condition',
-        position: { x: 680, y: 240 },
+        position: { x: 720, y: 240 },
         data: {
-          label: 'Is Priority Critical?',
+          label: 'High Value Order Check',
           type: 'condition',
           config: {
-            fieldPath: 'priority',
-            operator: 'equals',
-            targetValue: 'critical'
+            fieldPath: 'amount',
+            operator: 'greater_than',
+            targetValue: 10000
           },
           status: 'idle'
         }
       },
       {
-        id: 'node-transform-urgent',
-        type: 'transform',
-        position: { x: 980, y: 130 },
-        data: {
-          label: 'Build PagerDuty Alert',
-          type: 'transform',
-          config: {
-            operation: 'template',
-            template: '🚨 CRITICAL ALERT: {{cleanMessage}} | Customer: {{customer}} (ID: {{ticketId}})',
-            targetField: 'urgentAlert'
-          },
-          status: 'idle'
-        }
-      },
-      {
-        id: 'node-output-pagerduty',
+        id: 'node-output-vip',
         type: 'output',
-        position: { x: 1280, y: 130 },
+        position: { x: 1040, y: 100 },
         data: {
-          label: 'On-Call Escalation Hook',
+          label: 'VIP Fast-Track Approval',
           type: 'output',
           config: {
-            destination: 'webhook',
-            label: 'Ops PagerDuty Channel',
-            includeMetadata: true
-          },
-          status: 'idle'
-        }
-      },
-      {
-        id: 'node-transform-standard',
-        type: 'transform',
-        position: { x: 980, y: 350 },
-        data: {
-          label: 'Format Standard Ticket',
-          type: 'transform',
-          config: {
-            operation: 'template',
-            template: 'Normal Ticket: {{cleanMessage}} (Assigned to General Queue)',
-            targetField: 'standardTicket'
+            destination: 'response',
+            label: 'VIP Fast-Track Approval',
+            actionType: 'AUTO_APPROVE'
           },
           status: 'idle'
         }
@@ -106,13 +85,14 @@ export const SEEDED_SAMPLE_WORKFLOW: Workflow = {
       {
         id: 'node-output-standard',
         type: 'output',
-        position: { x: 1280, y: 350 },
+        position: { x: 1040, y: 380 },
         data: {
-          label: 'Standard Queue Inbox',
+          label: 'Standard Review Queue',
           type: 'output',
           config: {
             destination: 'response',
-            label: 'Zendesk General Inbox'
+            label: 'Standard Review Queue',
+            actionType: 'MANUAL_REVIEW'
           },
           status: 'idle'
         }
@@ -122,38 +102,28 @@ export const SEEDED_SAMPLE_WORKFLOW: Workflow = {
       {
         id: 'edge-1',
         source: 'node-trigger-1',
-        target: 'node-transform-clean',
-        label: 'Payload'
+        target: 'node-transform-1',
+        label: 'Refund Payload'
       },
       {
         id: 'edge-2',
-        source: 'node-transform-clean',
-        target: 'node-condition-priority',
+        source: 'node-transform-1',
+        target: 'node-condition-1',
         label: 'Sanitized'
       },
       {
         id: 'edge-3-true',
-        source: 'node-condition-priority',
-        target: 'node-transform-urgent',
+        source: 'node-condition-1',
+        target: 'node-output-vip',
         sourceHandle: 'true',
-        label: 'True (Critical)'
+        label: 'True (> 10000)'
       },
       {
-        id: 'edge-4-urgent',
-        source: 'node-transform-urgent',
-        target: 'node-output-pagerduty'
-      },
-      {
-        id: 'edge-5-false',
-        source: 'node-condition-priority',
-        target: 'node-transform-standard',
+        id: 'edge-3-false',
+        source: 'node-condition-1',
+        target: 'node-output-standard',
         sourceHandle: 'false',
-        label: 'False (Normal)'
-      },
-      {
-        id: 'edge-6-standard',
-        source: 'node-transform-standard',
-        target: 'node-output-standard'
+        label: 'False (≤ 10000)'
       }
     ]
   }

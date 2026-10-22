@@ -7,7 +7,7 @@ describe('Repository & Revision Management', () => {
     const repos = createInMemoryRepositories();
     const wf = await repos.workflows.getById(SEEDED_SAMPLE_WORKFLOW.id);
     expect(wf).not.toBeNull();
-    expect(wf?.name).toBe('Support Ticket Triage & Escalation');
+    expect(wf?.name).toBe('E-Commerce Refund Router');
     expect(wf?.revision).toBe(1);
   });
 

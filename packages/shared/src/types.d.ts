@@ -6,7 +6,7 @@ export interface TriggerConfig {
     initialPayload?: Record<string, any>;
     triggerType?: 'manual' | 'webhook' | 'schedule';
 }
-export type TransformOp = 'trim' | 'lowercase' | 'uppercase' | 'json_parse' | 'json_stringify' | 'extract_field' | 'template' | 'math_add' | 'default_value';
+export type TransformOp = 'trim' | 'lowercase' | 'uppercase' | 'trim_and_lowercase' | 'json_parse' | 'json_stringify' | 'extract_field' | 'template' | 'math_add' | 'default_value';
 export type TransformOperation = TransformOp;
 export interface TransformConfig {
     operation: TransformOp;

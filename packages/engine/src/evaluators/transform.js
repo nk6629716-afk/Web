@@ -66,6 +66,13 @@ export function evaluateTransform(node, inputPayload) {
             transformedValue = typeof rawValue === 'string' ? rawValue.toUpperCase() : rawValue;
             break;
         }
+        case 'trim_and_lowercase': {
+            // Trim whitespace then convert to lowercase — used by E-Commerce Refund Router
+            transformedValue = typeof rawValue === 'string'
+                ? rawValue.trim().toLowerCase()
+                : rawValue;
+            break;
+        }
         case 'json_parse': {
             if (typeof rawValue === 'string') {
                 try {

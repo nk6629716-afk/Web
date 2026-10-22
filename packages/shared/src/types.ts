@@ -14,6 +14,7 @@ export type TransformOp =
   | 'trim' 
   | 'lowercase' 
   | 'uppercase' 
+  | 'trim_and_lowercase'   // E-Commerce Refund Router: trim whitespace then lowercase
   | 'json_parse' 
   | 'json_stringify'
   | 'extract_field' 

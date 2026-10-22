@@ -60,7 +60,7 @@ describe('Relay Backend API Integration Tests', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.workflow.id).toBe(SEEDED_SAMPLE_WORKFLOW.id);
-    expect(data.workflow.graph.nodes.length).toBe(7);
+    expect(data.workflow.graph.nodes.length).toBe(5); // Refund Router: trigger, transform, condition, vip-output, standard-output
   });
 
   it('PUT /api/workflows/:id performs optimistic revision-checked save', async () => {
@@ -102,15 +102,16 @@ describe('Relay Backend API Integration Tests', () => {
     expect(errData.canonicalWorkflow).toBeDefined();
   });
 
-  it('POST /api/workflows/:id/execute runs graph and computes actual outputs', async () => {
+  it('POST /api/workflows/:id/execute runs Refund Router and routes to VIP branch', async () => {
     const execRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         input: {
-          customerName: '  Alice Cooper  ',
-          priority: 'critical',
-          message: 'Server down urgently',
+          orderId: 'ORD-TEST-01',
+          amount: 15000,
+          customer: '  TEST CUSTOMER  ',
+          reason: 'Wrong item shipped',
         },
       }),
     });
@@ -118,8 +119,9 @@ describe('Relay Backend API Integration Tests', () => {
     expect(execRes.status).toBe(200);
     const data = await execRes.json();
     expect(data.execution.status).toBe('succeeded');
-    expect(data.summary.steps.length).toBe(7);
-    expect(data.summary.steps.filter((s: any) => s.status === 'succeeded').length).toBeGreaterThanOrEqual(5);
+    // 5 nodes total: trigger + transform + condition + vip-output(succeeded) + standard-output(skipped)
+    expect(data.summary.steps.length).toBe(5);
+    expect(data.summary.steps.filter((s: any) => s.status === 'succeeded').length).toBeGreaterThanOrEqual(3);
   });
 
   it('GET /api/workflows/:id/executions lists execution history', async () => {

@@ -194,19 +194,31 @@ describe('Workflow Runner', () => {
     expect(step3?.status).toBe('skipped');
   });
 
-  it('executes the SEEDED_SAMPLE_WORKFLOW end-to-end and computes real alert output', async () => {
+  it('executes the SEEDED_SAMPLE_WORKFLOW end-to-end as E-Commerce Refund Router', async () => {
     const summary = await runWorkflow(SEEDED_SAMPLE_WORKFLOW.graph);
     expect(summary.status).toBe('succeeded');
-    
-    // Check that Urgent branch ran and standard branch skipped
-    const urgentOut = summary.finalOutputs['node-output-pagerduty'];
-    expect(urgentOut).toBeDefined();
-    expect(urgentOut.urgentAlert).toContain('🚨 CRITICAL ALERT:');
-    expect(urgentOut.urgentAlert).toContain('Production database replica lag is spiking!');
-    expect(urgentOut.urgentAlert).toContain('Acme Cloud Corp');
-    
-    // Standard branch should be skipped
+
+    // Transform node: "  RAHUL SHARMA  " → "rahul sharma"
+    const transformStep = summary.steps.find(s => s.nodeId === 'node-transform-1');
+    expect(transformStep?.status).toBe('succeeded');
+    expect(transformStep?.output?.cleanCustomer).toBe('rahul sharma');
+
+    // Condition node: amount (12500) > 10000 → true branch active
+    const conditionStep = summary.steps.find(s => s.nodeId === 'node-condition-1');
+    expect(conditionStep?.status).toBe('succeeded');
+    expect(conditionStep?.output?._conditionResult?.conditionMet).toBe(true);
+
+    // VIP Fast-Track Approval output (true branch) — must have succeeded
+    const vipOut = summary.finalOutputs['node-output-vip'];
+    expect(vipOut).toBeDefined();
+    expect(vipOut.status).toBe('APPROVED_VIP');
+    expect(vipOut.priority).toBe('HIGH');
+    expect(vipOut.customer).toBe('rahul sharma');
+    expect(vipOut.orderId).toBe('ORD-9912');
+
+    // Standard Review Queue (false branch) — must be skipped
     const standardStep = summary.steps.find(s => s.nodeId === 'node-output-standard');
     expect(standardStep?.status).toBe('skipped');
+    expect(summary.finalOutputs['node-output-standard']).toBeUndefined();
   });
 });

@@ -67,7 +67,7 @@ describe('Relay Backend Realtime Socket.IO Integration Tests', () => {
     const [syncPayload, presencePayload] = await Promise.all([syncPromise, presencePromise]);
 
     expect(syncPayload.workflow.id).toBe(SEEDED_SAMPLE_WORKFLOW.id);
-    expect(syncPayload.workflow.graph.nodes.length).toBe(7);
+    expect(syncPayload.workflow.graph.nodes.length).toBe(5); // Refund Router: 5 nodes
     expect(Array.isArray(presencePayload.collaborators)).toBe(true);
   });
 
