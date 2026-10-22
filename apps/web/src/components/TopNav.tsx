@@ -106,16 +106,20 @@ export const TopNav: React.FC<TopNavProps> = ({
         {collaborators.length > 0 && (
           <div className="flex items-center -space-x-1.5 px-2 py-1 rounded-md bg-slate-900/60 border border-slate-800">
             <Users className="w-3 h-3 text-slate-500 mr-2" />
-            {collaborators.map((c) => (
-              <div
-                key={c.id}
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-950 border-2 border-slate-950 shadow"
-                style={{ backgroundColor: c.color }}
-                title={`${c.name} (${c.id.substring(0, 5)})`}
-              >
-                {c.name.substring(0, 2).toUpperCase()}
-              </div>
-            ))}
+            {collaborators.map((c, i) => {
+              const cId = c.id || c.userId || `c-${i}`;
+              const cName = c.name || c.displayName || 'Peer';
+              return (
+                <div
+                  key={cId}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-950 border-2 border-slate-950 shadow"
+                  style={{ backgroundColor: c.color }}
+                  title={`${cName} (${cId.substring(0, 5)})`}
+                >
+                  {cName.substring(0, 2).toUpperCase()}
+                </div>
+              );
+            })}
           </div>
         )}
 

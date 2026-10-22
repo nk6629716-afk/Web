@@ -161,7 +161,7 @@ export interface Execution {
   workflowId: string;
   status: 'running' | 'succeeded' | 'failed' | 'pending';
   triggeredBy?: string;
-  input: any;
+  input?: any;
   steps?: ExecutionStep[];
   startedAt: string;
   finishedAt?: string;

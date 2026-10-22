@@ -1,7 +1,9 @@
 import { getNestedValue } from './transform';
 export function evaluateCondition(node, inputPayload) {
     const config = (node.data?.config || {});
-    const { fieldPath, operator, targetValue } = config;
+    const fieldPath = config.fieldPath || config.field || '';
+    const operator = config.operator;
+    const targetValue = config.targetValue !== undefined ? config.targetValue : config.value;
     const actualValue = fieldPath ? getNestedValue(inputPayload, fieldPath) : undefined;
     let conditionMet = false;
     switch (operator) {

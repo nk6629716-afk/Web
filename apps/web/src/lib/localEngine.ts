@@ -249,8 +249,9 @@ export async function executeWorkflow(
 
         case 'condition': {
           const cfg = (node.data.config || {}) as ConditionConfig;
-          const leftVal = currentInput[cfg.field];
-          const rightVal = cfg.value;
+          const fieldName = (cfg.field || cfg.fieldPath || '') as string;
+          const leftVal = fieldName ? currentInput[fieldName] : undefined;
+          const rightVal = cfg.value !== undefined ? cfg.value : cfg.targetValue;
           let condPassed = false;
 
           if (cfg.operator === 'equals') {

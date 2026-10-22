@@ -1,5 +1,5 @@
 export function evaluateTrigger(node, runtimeInput) {
-    const initialPayload = node.data?.config?.initialPayload || {};
+    const initialPayload = node.data?.config?.initialPayload || node.data?.config?.payload || {};
     // If runtime input is provided (e.g. from execution start request), merge it with initial payload
     let outputPayload = {};
     if (typeof initialPayload === 'object' && initialPayload !== null) {

@@ -46,7 +46,10 @@ export function setNestedValue(obj, path, value) {
  */
 export function evaluateTransform(node, inputPayload) {
     const config = (node.data?.config || {});
-    const { operation, fieldPath, targetField, template, operand, defaultValue } = config;
+    const operation = config.operation;
+    const fieldPath = config.fieldPath || config.field;
+    const targetField = config.targetField || config.outputField;
+    const { template, operand, defaultValue } = config;
     const targetKey = targetField || (fieldPath ? `${fieldPath}_transformed` : 'result');
     const rawValue = fieldPath ? getNestedValue(inputPayload, fieldPath) : inputPayload;
     let transformedValue;
