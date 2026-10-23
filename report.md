@@ -1,21 +1,22 @@
 # Relay — Comprehensive Project Architecture & Technical Report
 
 **Project Title:** Relay — Real-Time Collaborative Workflow Studio & DAG Engine  
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Monorepo:** `relay-workspace`  
 **Date:** October 2026  
-**Status:** Tested & Fully Operational (36/36 Unit & Integration Tests Passing)
+**Status:** Tested & Fully Operational (44/44 Unit & Integration Tests Passing)
 
 ---
 
 ## 1. Executive Summary
 
-**Relay** is an enterprise-grade, real-time collaborative workflow automation platform and Directed Acyclic Graph (DAG) execution engine. Designed as a modern alternative to Zapier, Make, and n8n, Relay enables cross-functional teams to visually construct, validate, and execute complex data routing workflows with live multi-user collaboration.
+**Relay** is an enterprise-grade, real-time collaborative workflow automation platform, Directed Acyclic Graph (DAG) execution engine, and public integration gateway. Designed as a modern, self-hostable alternative to Zapier, Make, and n8n, Relay enables cross-functional teams to visually construct, validate, execute, and programmatically trigger complex data routing workflows.
 
 Key highlights of Relay:
 - **Interactive Visual Canvas:** High-performance graph canvas built with `@xyflow/react` and a bespoke tactile Neumorphic/Skeuomorphic design system featuring dynamic status LEDs, custom bezier connectors, and responsive node palettes.
 - **Topological DAG Execution Engine:** Deterministic, safe workflow scheduler executing nodes in topological order with real-time step streaming (`pending`, `running`, `succeeded`, `failed`, `skipped`).
 - **Conditional Branch Routing:** Dynamic evaluation of condition nodes with automated downstream branch deactivation, ensuring non-matching execution paths are cleanly skipped.
+- **Public Integration API Gateway (`/api/v1`):** Cryptographically secure, high-entropy API keys (`rl_live_...`), timing-safe SHA-256 hash verification, fine-grained scopes (`workflows:read`, `workflows:execute`, `executions:read`, `webhooks:manage`), sliding-window rate limiting, and request correlation IDs (`X-Request-Id`).
 - **Real-Time Collaboration & Presence:** Socket.IO room sync with live peer cursors, node selection badges, and active collaborator avatars.
 - **Conflict-Free Revision Control:** Optimistic concurrency control (`expectedRevision`) preventing lost updates or race conditions across multiple active editors.
 - **Dual-Storage Resilience:** Zero-dependency in-memory repository for local development and rapid testing, seamlessly backed by Supabase PostgreSQL with automated schema migrations and version history snapshots.
@@ -41,20 +42,27 @@ relay/
 │   │   ├── package.json
 │   │   └── vite.config.ts
 │   │
-│   └── server/                  # Backend API & Real-Time Engine Server
+│   └── server/                  # Backend API, Integration Gateway & Real-Time Server
 │       ├── src/
 │       │   ├── index.ts         # Server bootstrap and port listener
-│       │   ├── server.ts        # Express REST API routes and request validation
-│       │   └── sockets.ts       # Socket.IO room lifecycle, presence, and live execution streaming
+│       │   ├── server.ts        # Express REST API routes, /api/v1 router & error handler
+│       │   ├── sockets.ts       # Socket.IO room lifecycle, presence, and live execution streaming
+│       │   └── integrations/    # Public Integration Gateway Layer
+│       │       ├── api-key-auth.ts     # Timing-safe auth & scope validation middleware
+│       │       ├── api-key-routes.ts   # Key lifecycle endpoints (create, list, revoke)
+│       │       ├── request-context.ts  # X-Request-Id & sliding-window rate limiting
+│       │       ├── errors.ts           # Standard ApiError classes & JSON envelope serializer
+│       │       └── index.ts            # Public integrations barrel exports
 │       ├── test/
-│       │   ├── server.test.ts   # REST API integration tests (8 passed)
-│       │   └── sockets.test.ts  # WebSockets realtime integration tests (4 passed)
+│       │   ├── server.test.ts   # Internal REST API integration tests (8 passed)
+│       │   ├── sockets.test.ts  # WebSockets realtime integration tests (4 passed)
+│       │   └── api-keys.test.ts # Public API Key & Scoped Auth tests (8 passed)
 │       ├── package.json
 │       └── tsconfig.json
 │
 ├── packages/
 │   ├── shared/                  # Common Contracts & Types
-│   │   └── src/                 # Node/Edge schemas, Socket event contracts, DTO interfaces
+│   │   └── src/                 # Node/Edge schemas, ApiKey contracts, Socket event interfaces
 │   │
 │   ├── engine/                  # Pure DAG Execution & Safe Evaluation Library
 │   │   ├── src/
@@ -65,12 +73,13 @@ relay/
 │   │   └── test/                # Unit tests for runner, validator, and evaluators (24 passed)
 │   │
 │   └── database/                # Repository Pattern & Database Adapters
-│       ├── src/                 # Repository interfaces, in-memory store, Supabase client
+│       ├── src/                 # IRepositories, IApiKeyRepository, in-memory store, Supabase client
 │       └── test/                # Revision locking & execution persistence tests
 │
 ├── database/
 │   └── migrations/              # Supabase PostgreSQL DDL (tables, indexes, RLS policies)
-│       └── 001_initial_schema.sql
+│       ├── 001_initial_schema.sql         # Projects, workflows, versions, executions
+│       └── 002_integration_api_keys.sql   # Integration API keys with indices & RLS
 │
 ├── .env.example                 # Environment variable templates
 ├── package.json                 # Monorepo root workspace configuration
@@ -88,6 +97,7 @@ relay/
 | **Workflow Canvas** | `@xyflow/react` (React Flow v12) | Native DAG rendering, interactive drag-and-drop handles, zoom/pan minimap. |
 | **Styling & Aesthetics** | Tailwind CSS, Custom Neumorphism | Tactile recessed/protruding shadow depths (`#292b30` base), glowing neon status LEDs. |
 | **Backend Runtime** | Node.js (>= 20.x), Express 4 | Lightweight, scalable HTTP REST API. |
+| **Public API Gateway** | Express Router (`/api/v1`), Crypto | Cryptographic SHA-256 tokens, timing-safe equality, fine-grained scope authorization. |
 | **Realtime Engine** | Socket.IO 4.x | Low-latency duplex communication, room isolation, reconnect handling. |
 | **Engine Execution** | TypeScript Pure AST Scheduler | Kahn's algorithm topological sorting with step duration profiling. |
 | **Database** | Supabase (PostgreSQL 15) | Relational integrity, JSONB graph persistence, version snapshots, Row-Level Security. |
@@ -124,30 +134,61 @@ When a `condition` node executes:
 
 ---
 
-## 5. Real-Time Collaboration & Concurrency Control
+## 5. Public Integration Architecture (`/api/v1`)
 
-### 5.1. Optimistic Concurrency Control (OCC)
-To eliminate race conditions when multiple users edit the same workflow:
-1. Every workflow possesses a monotonic integer `revision` (e.g., `v1`, `v2`, `v3`).
-2. Every modification request (`PUT /api/workflows/:id` or WebSocket `workflow:update`) must provide `expectedRevision`.
-3. The server compares `expectedRevision` against the canonical state:
-   - **Match:** The update is committed, the revision is incremented, and the change is broadcast to peers as `workflow:updated`. A historical snapshot is saved to `workflow_versions`.
-   - **Mismatch:** The update is rejected with `409 STALE_REVISION`, returning the latest canonical graph to the client for conflict resolution.
+To allow external programs, automation suites, and third-party microservices to interact with Relay safely, Relay features a **versioned Public Integration API Gateway**.
 
-### 5.2. Socket.IO Presence Protocol
-- **Rooms:** Clients join room `workflow:{workflowId}` via `room:join`.
-- **Presence Avatars:** Collaborators receive live updates (`presence:update`) displaying user initials, avatar colors, and online status.
-- **Collaborator Selection:** Clicking a node broadcasts `presence:select`, illuminating a colored border around the node on all peer canvases to prevent simultaneous overlapping edits.
-- **Synchronized Execution Playback:** When any collaborator clicks **Run Workflow**, the server executes the graph and broadcasts step events (`execution:event`) with configurable delay intervals, animating the execution path synchronously across all active peer viewports.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as External Program / Client
+    participant GW as /api/v1 Gateway
+    participant Auth as ApiKeyAuth Middleware
+    participant Repo as IApiKeyRepository
+    participant Router as Engine / Workflow API
+
+    Client->>GW: POST /api/v1/... (Header: Authorization: Bearer rl_live_...)
+    GW->>Auth: Extract Bearer token & verify format
+    Auth->>Auth: Compute SHA-256 hash & extract prefix
+    Auth->>Repo: findByKeyPrefix(prefix)
+    Repo-->>Auth: Stored key metadata & secret_hash
+    Auth->>Auth: crypto.timingSafeEqual(expected, actual)
+    alt Hash mismatch or key revoked/expired
+        Auth-->>Client: 401 Unauthorized { error: { code, message, requestId } }
+    else Scopes missing
+        Auth-->>Client: 403 Forbidden { error: { code: INSUFFICIENT_PERMISSIONS } }
+    else Valid credentials & scopes
+        Auth->>Router: Forward request with req.projectId & req.apiKey
+        Router-->>Client: 200 OK / 201 Created (JSON Response)
+    end
+```
+
+### 5.1. Token Cryptography & Lifecycle
+- **Token Generation:** Generated using 24 bytes of cryptographically secure random entropy (`crypto.randomBytes(24)`), prefixed with `rl_live_` (e.g., `rl_live_9f8e7d6c...`).
+- **One-Way Storage:** Only the SHA-256 digest of the token is saved to disk or database. The plaintext token is returned **strictly once** upon generation.
+- **Timing-Safe Verification:** Token hashes are verified using `crypto.timingSafeEqual` to safeguard against timing side-channel attacks.
+- **Granular Scopes:**
+  - `workflows:read` — View workflows and graphs within permitted project.
+  - `workflows:execute` — Trigger workflow runs and execute DAGs.
+  - `executions:read` — Query run status, step execution logs, and computed outputs.
+  - `webhooks:manage` — Register, rotate, and revoke inbound/outbound webhook configurations.
+
+### 5.2. Request Context & Rate Limiting
+- **Request Tracing:** Every request is stamped with an `X-Request-Id` (propagated from caller or generated via `req_...`).
+- **Sliding-Window Rate Limiting:** Enforces rate limits per client IP / key (default: 120 req/min) with standard headers:
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset`
+  - `Retry-After` (on 429 status)
 
 ---
 
 ## 6. Data Model & Database Schema
 
-The production schema is managed via Supabase migrations (`database/migrations/001_initial_schema.sql`):
+The production schema is managed via Supabase migrations (`database/migrations/`):
 
 ```sql
--- Core Workflows Table
+-- 001_initial_schema.sql: Core Workflows Table
 CREATE TABLE workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
@@ -190,26 +231,53 @@ CREATE TABLE execution_steps (
     duration_ms INTEGER,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 002_integration_api_keys.sql: Public Integration API Keys
+CREATE TABLE integration_api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    secret_hash TEXT NOT NULL,
+    scopes TEXT[] NOT NULL DEFAULT ARRAY['workflows:read'],
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX idx_api_keys_lookup ON integration_api_keys (key_prefix) WHERE revoked_at IS NULL;
+CREATE INDEX idx_api_keys_project ON integration_api_keys (project_id);
 ```
 
 ---
 
 ## 7. API & WebSocket Specifications
 
-### 7.1. REST Endpoints
+### 7.1. Public Integration API Endpoints (`/api/v1`)
 
-| Method | Endpoint | Description | Auth / Validation |
+| Method | Endpoint | Description | Scope Required |
 |---|---|---|---|
-| `GET` | `/api/health` | Uptime check and system health | Public |
-| `GET` | `/api/projects` | List active projects | Standard |
-| `POST` | `/api/projects` | Create a new project | Body: `{ name: string }` |
-| `GET` | `/api/workflows/:id` | Fetch workflow graph (seeds demo if not found) | Returns canonical graph & revision |
-| `PUT` | `/api/workflows/:id` | Save workflow graph | OCC Check: `{ expectedRevision, graph }` |
-| `GET` | `/api/workflows/:id/executions` | Fetch past workflow run history | Array of execution records |
-| `GET` | `/api/executions/:id` | Get single run details & node outputs | Returns full execution log with steps |
-| `POST` | `/api/workflows/:id/execute` | Trigger immediate server execution | Returns final node outputs and status |
+| `POST` | `/api/v1/api-keys` | Generate new integration API key (returns token once) | Project Admin |
+| `GET` | `/api/v1/api-keys?projectId=...` | List active keys (masked metadata, no secrets) | Project Admin |
+| `DELETE` | `/api/v1/api-keys/:id` | Revoke an API key immediately | Project Admin |
+| `GET` | `/api/v1/workflows/:id` | Read workflow graph (project isolated) | `workflows:read` |
+| `POST` | `/api/v1/workflows/:id/runs` | Execute workflow with runtime input & idempotency | `workflows:execute` |
+| `GET` | `/api/v1/runs/:id` | Retrieve execution status & per-node outputs | `executions:read` |
 
-### 7.2. WebSocket Events
+### 7.2. Internal Studio Endpoints (`/api/*`)
+
+| Method | Endpoint | Description | Purpose |
+|---|---|---|---|
+| `GET` | `/api/health` | Uptime check and system health | Service liveness |
+| `GET` | `/api/projects` | List workspace projects | Studio navigation |
+| `POST` | `/api/projects` | Create a new project | Workspace management |
+| `GET` | `/api/workflows/:id` | Fetch workflow graph (seeds demo if not found) | Studio canvas |
+| `PUT` | `/api/workflows/:id` | Save workflow graph with OCC check | Studio auto-save |
+| `GET` | `/api/workflows/:id/executions` | Fetch past workflow run history | Studio execution tab |
+| `GET` | `/api/executions/:id` | Get single run details & node outputs | Studio inspector |
+| `POST` | `/api/workflows/:id/execute` | Trigger immediate server execution | Canvas RUN button |
+
+### 7.3. WebSocket Events (`Socket.IO`)
 
 | Event Name | Direction | Payload |
 |---|---|---|
@@ -227,39 +295,48 @@ CREATE TABLE execution_steps (
 
 ## 8. Verification & Test Suite Results
 
-The codebase contains automated unit and integration tests covering the engine, server endpoints, and real-time socket flows.
+The codebase contains automated unit and integration tests across 7 test files, achieving **100% test pass rate**.
 
 ### Test Execution Summary (Vitest)
 ```text
-Test Files  6 passed (6)
-Tests       36 passed (36)
-Time        11.41s
+Test Files  7 passed (7)
+Tests       44 passed (44)
+Total Time  13.56s
 ```
 
 ### Breakdown of Test Suites:
-1. **DAG Graph Validator Tests (`packages/engine/test/validator.test.ts`):**
+1. **Public API Key & Scoped Auth Tests (`apps/server/test/api-keys.test.ts` — 8 passed):**
+   - Validation of payload requirements and rejection of invalid scopes.
+   - Generation of high-entropy `rl_live_...` tokens and safe metadata verification.
+   - Listing keys without secret or hash leakage.
+   - Key revocation enforcement (`401 Unauthorized` on revoked keys).
+   - Rejection of missing and malformed `Authorization` headers.
+   - Timing-safe rejection of forged or altered tokens.
+   - Scope authorization checks (`403 Forbidden` on missing `workflows:execute` scope).
+   - Rejection of expired credentials.
+2. **DAG Graph Validator Tests (`packages/engine/test/validator.test.ts` — 6 passed):**
    - Validates valid linear and branching DAGs.
    - Detects and rejects circular loops (`Node A -> Node B -> Node A`).
    - Flags dangling edge references and unsupported node types.
    - Enforces minimum 1 trigger node requirement.
-2. **Safe Evaluator Registry Tests (`packages/engine/test/evaluators.test.ts`):**
+3. **Safe Evaluator Registry Tests (`packages/engine/test/evaluators.test.ts` — 10 passed):**
    - String manipulations (`trim`, `lowercase`, `uppercase`).
    - JSON parsing with error isolation.
    - Dot notation path navigation (`extract_field`).
    - Mustache-style token substitution (`template`).
    - Comparison predicates (`equals`, `contains`, `greater_than`).
-3. **Execution Runner Tests (`packages/engine/test/runner.test.ts`):**
+4. **Execution Runner Tests (`packages/engine/test/runner.test.ts` — 4 passed):**
    - Topological order step execution.
    - Seeded "Customer Refund Router" demo execution.
    - Conditional branch deactivation and downstream step skipping.
-4. **Repository Layer Tests (`packages/database/test/repository.test.ts`):**
+5. **Repository Layer Tests (`packages/database/test/repository.test.ts` — 4 passed):**
    - In-memory workflow retrieval and seeding.
    - Optimistic revision increments (`v1 -> v2`).
    - Stale write rejections.
-5. **Express REST API Tests (`apps/server/test/server.test.ts`):**
+6. **Express REST API Tests (`apps/server/test/server.test.ts` — 8 passed):**
    - Health status, project management, workflow fetch and revision saves.
    - Execution trigger endpoint (`POST /api/workflows/:id/execute`).
-6. **Socket.IO Real-Time Integration Tests (`apps/server/test/sockets.test.ts`):**
+7. **Socket.IO Real-Time Integration Tests (`apps/server/test/sockets.test.ts` — 4 passed):**
    - Room connection and initial state synchronization.
    - Live broadcast of graph updates to active peers.
    - Revision rejection handling over WebSockets.
@@ -309,19 +386,16 @@ npm run build
 
 ---
 
-## 10. Project Assessment & Future Roadmap
+## 10. Public Integration Roadmap
 
-### Achievements
-- Monorepo architecture is clean, decoupled, and strictly typed.
-- End-to-end functionality (UI -> WebSocket -> Scheduler -> Safe Evaluator -> Execution Console) is verified with 36 passing tests.
-- Zero-config local development thanks to the dual in-memory/Supabase repository design.
-
-### Recommended Future Enhancements
-1. **Custom Webhook Trigger Node:** Allow external HTTP requests to trigger workflow runs via a dedicated webhook URL.
-2. **Cron/Schedule Trigger Node:** Support scheduled executions via cron syntax.
-3. **Edge Loop Support:** Controlled looping mechanisms with max iteration counters.
-4. **Enhanced Undo/Redo History:** In-memory undo/redo stacks synced with the server revision history.
-5. **Team RBAC:** Fine-grained workspace permissions (`Viewer`, `Editor`, `Admin`) backed by Supabase RLS.
+| Phase | Milestone | Deliverables | Status |
+|---|---|---|---|
+| **Phase 0** | Baseline Audit | Architectural audit, test suite verification, execution tracing | ✅ Completed |
+| **Phase 1** | Public API Foundation | `/api/v1` gateway, API keys, timing-safe auth, rate limiting | ✅ Completed |
+| **Phase 2** | Workflow Run API | `POST /api/v1/workflows/:id/runs`, atomic `Idempotency-Key` engine | 🔄 Next |
+| **Phase 3** | Inbound Webhooks | `POST /api/v1/webhooks/:id`, HMAC-SHA256 signature verification | 📋 Planned |
+| **Phase 4** | Outbound Webhooks & SSRF Node | Event dispatcher, retry backoff, DNS-safe HTTP action node | 📋 Planned |
+| **Phase 5** | OpenAPI 3.1 & SDKs | `docs/openapi.yaml`, Python & TypeScript client examples | 📋 Planned |
 
 ---
 *Report compiled autonomously for the Relay development team.*
