@@ -36,7 +36,7 @@ export function evaluateOutput(node, inputPayload) {
     const outputPayload = {
         ...domainOutput,
         _relayMetadata: {
-            deliveredTo: destination,
+            deliveredTo: destination === 'integration' && config.integrationId ? `integration:${config.integrationId}` : destination,
             label,
             deliveredAt: new Date().toISOString()
         }

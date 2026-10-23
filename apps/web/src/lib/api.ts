@@ -4,7 +4,7 @@
  * environment resolution (Netlify proxy, Render production URL, localhost).
  */
 
-import { Project, Workflow, Execution, ExecutionStep } from '@relay/shared';
+import { Project, Workflow, Execution, ExecutionStep, AppIntegrationSafeResponse, TestConnectionResult } from '@relay/shared';
 
 export interface DatabaseStatus {
   status: 'ready' | 'migration_required' | 'error';
@@ -146,4 +146,54 @@ export const api = {
   async getExecution(id: string): Promise<{ execution: Execution; steps: ExecutionStep[] }> {
     return request<{ execution: Execution; steps: ExecutionStep[] }>(`/api/executions/${id}`);
   },
+
+  // Integrations
+  async getIntegrations(projectId: string = 'demo-project-001'): Promise<AppIntegrationSafeResponse[]> {
+    const res = await request<{ integrations: AppIntegrationSafeResponse[] }>(`/api/integrations?projectId=${encodeURIComponent(projectId)}`);
+    return res.integrations || [];
+  },
+
+  async getIntegration(id: string): Promise<AppIntegrationSafeResponse> {
+    const res = await request<{ integration: AppIntegrationSafeResponse }>(`/api/integrations/${id}`);
+    return res.integration;
+  },
+
+  async createIntegration(data: any): Promise<AppIntegrationSafeResponse> {
+    const res = await request<{ integration: AppIntegrationSafeResponse }>('/api/integrations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res.integration;
+  },
+
+  async updateIntegration(id: string, updates: any): Promise<AppIntegrationSafeResponse> {
+    const res = await request<{ integration: AppIntegrationSafeResponse }>(`/api/integrations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    return res.integration;
+  },
+
+  async deleteIntegration(id: string, projectId: string = 'demo-project-001'): Promise<boolean> {
+    const res = await request<{ success: boolean }>(`/api/integrations/${id}?projectId=${encodeURIComponent(projectId)}`, {
+      method: 'DELETE',
+    });
+    return !!res.success;
+  },
+
+  async testIntegration(id: string): Promise<TestConnectionResult> {
+    const res = await request<{ result: TestConnectionResult }>(`/api/integrations/${id}/test`, {
+      method: 'POST',
+    });
+    return res.result;
+  },
+
+  async testIntegrationDirect(config: any): Promise<TestConnectionResult> {
+    const res = await request<{ result: TestConnectionResult }>('/api/integrations/test', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+    return res.result;
+  },
 };
+

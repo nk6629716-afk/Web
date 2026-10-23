@@ -56,7 +56,11 @@ export interface ConditionConfig {
 }
 
 export interface OutputConfig {
-  destination?: 'response' | 'log' | 'webhook';
+  destination?: 'response' | 'log' | 'webhook' | 'integration';
+  integrationId?: string;
+  endpointPath?: string;
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  headers?: Record<string, string>;
   title?: string;
   label?: string;
   messageTemplate?: string;
@@ -213,5 +217,43 @@ export interface ApiErrorEnvelope {
     requestId?: string;
     details?: any;
   };
+}
+
+export type AuthType = 'none' | 'bearer' | 'api_key' | 'basic' | 'custom_header';
+
+export interface AppIntegration {
+  id: string;
+  projectId: string;
+  name: string;
+  appType?: 'citypulse' | 'generic_http' | 'slack' | 'webhook';
+  baseUrl: string;
+  httpMethod: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  authType: AuthType;
+  encryptedAuth?: string;
+  authHeaderName?: string;
+  headers?: Record<string, string>;
+  timeoutMs: number;
+  testEndpoint?: string;
+  testMethod?: 'GET' | 'POST';
+  status: 'active' | 'inactive' | 'error';
+  lastTestedAt?: string;
+  lastTestStatus?: 'succeeded' | 'failed';
+  lastTestMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppIntegrationSafeResponse extends Omit<AppIntegration, 'encryptedAuth'> {
+  hasSecret?: boolean;
+  maskedSecret?: string;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  statusCode?: number;
+  durationMs: number;
+  message: string;
+  responseSnippet?: string;
+  responseData?: any;
 }
 

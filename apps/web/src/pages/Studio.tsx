@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   ReactFlowProvider,
   useNodesState,
@@ -15,10 +15,13 @@ import {
   NodeType,
   Workflow,
   WorkflowNode,
+  AppIntegrationSafeResponse,
 } from '@relay/shared';
 import { SAMPLE_WORKFLOW } from '../lib/sampleWorkflow';
 import { executeWorkflow, validateGraph } from '../lib/localEngine';
+import { api } from '../lib/api';
 import { Header, AppView } from '../components/layout/Header';
+import { ConflictModal } from '../components/ConflictModal';
 import { ProjectsView } from '../components/ProjectsView';
 import { IntegrationsView } from '../components/IntegrationsView';
 import { NodePalette } from '../components/layout/NodePalette';
@@ -26,7 +29,7 @@ import { WorkflowCanvas } from '../components/WorkflowCanvas';
 import { InspectorPanel } from '../components/layout/InspectorPanel';
 import { ExecutionConsole } from '../components/ExecutionConsole';
 import { StatusLED } from '../components/ui/StatusLED';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 
 const INITIAL_COLLABORATORS: Collaborator[] = [
   {
@@ -70,6 +73,10 @@ export const Studio: React.FC<StudioProps> = ({
   const [workflowTitle, setWorkflowTitle] = useState(SAMPLE_WORKFLOW.name);
   const [revision, setRevision] = useState(SAMPLE_WORKFLOW.revision);
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [conflictWorkflow, setConflictWorkflow] = useState<Workflow | null>(null);
+  const [isLoadingWorkflow, setIsLoadingWorkflow] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-transform-1');
   const [isRunning, setIsRunning] = useState(false);
   const [execution, setExecution] = useState<Execution | null>(null);
@@ -102,6 +109,20 @@ export const Studio: React.FC<StudioProps> = ({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [availableIntegrations, setAvailableIntegrations] = useState<AppIntegrationSafeResponse[]>([]);
+
+  const loadIntegrations = useCallback(async () => {
+    try {
+      const list = await api.getIntegrations();
+      setAvailableIntegrations(list);
+    } catch (err) {
+      console.warn('Could not load integrations for studio inspector:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIntegrations();
+  }, [loadIntegrations]);
 
   const showToast = (type: 'success' | 'error' | 'info', message: string) => {
     setToast({ type, message });
@@ -109,6 +130,186 @@ export const Studio: React.FC<StudioProps> = ({
       setToast((curr) => (curr?.message === message ? null : curr));
     }, 5000);
   };
+
+  // Load workflow from backend on mount or when switching active workflow
+  const loadWorkflow = useCallback(async (targetId: string = workflow.id) => {
+    setIsLoadingWorkflow(true);
+    try {
+      const res = await api.getWorkflow(targetId);
+      if (res && res.workflow) {
+        const wf = res.workflow;
+        setWorkflow(wf);
+        setWorkflowTitle(wf.name);
+        setRevision(wf.revision);
+
+        setNodes(
+          (wf.graph?.nodes || []).map((n) => ({
+            id: n.id,
+            type: n.type,
+            position: n.position,
+            data: n.data,
+          }))
+        );
+
+        setEdges(
+          (wf.graph?.edges || []).map((e) => ({
+            id: e.id,
+            type: 'neon',
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            targetHandle: e.targetHandle,
+            label: e.label,
+            animated: false,
+          }))
+        );
+
+        setIsDirty(false);
+        setSaveStatus('idle');
+        setConflictWorkflow(null);
+      }
+    } catch (err: any) {
+      console.warn('Backend unavailable on initial load, using default demo workflow:', err?.message);
+    } finally {
+      setIsLoadingWorkflow(false);
+    }
+  }, [workflow.id, setNodes, setEdges]);
+
+  useEffect(() => {
+    loadWorkflow(workflow.id);
+  }, []);
+
+  // Save workflow action with optimistic locking & revision verification
+  const handleSaveWorkflow = useCallback(
+    async (forcedRevision?: number) => {
+      if (isSaving) return;
+
+      const currentGraph = {
+        nodes: nodes.map((n) => ({
+          id: n.id,
+          type: n.type as NodeType,
+          position: n.position,
+          data: n.data as any,
+        })),
+        edges: edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          label: typeof e.label === 'string' ? e.label : undefined,
+        })),
+      };
+
+      // Validate graph before saving
+      const validation = validateGraph(currentGraph);
+      if (!validation.isValid) {
+        showToast('error', `Cannot save: ${validation.errors.join('; ')}`);
+        setSaveStatus('failed');
+        return;
+      }
+
+      const targetRevision = forcedRevision !== undefined ? forcedRevision : revision;
+      setIsSaving(true);
+      setSaveStatus('saving');
+
+      try {
+        const res = await api.saveWorkflow(
+          workflow.id,
+          currentGraph,
+          workflowTitle,
+          targetRevision
+        );
+
+        if (res && res.workflow) {
+          setWorkflow(res.workflow);
+          setRevision(res.workflow.revision);
+          setWorkflowTitle(res.workflow.name);
+          setIsDirty(false);
+          setSaveStatus('saved');
+          setConflictWorkflow(null);
+          showToast('success', `Workflow "${res.workflow.name}" saved (rev #${res.workflow.revision})!`);
+          setTimeout(() => {
+            setSaveStatus((curr) => (curr === 'saved' ? 'idle' : curr));
+          }, 3000);
+        }
+      } catch (err: any) {
+        setSaveStatus('failed');
+        if (err.status === 409 || err.code === 'STALE_REVISION') {
+          const canonical = err.data?.canonicalWorkflow || null;
+          setConflictWorkflow(canonical);
+          showToast('error', 'Conflict: Another session modified this workflow.');
+        } else {
+          showToast('error', `Save failed: ${err.message || 'Server error'}`);
+        }
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [isSaving, nodes, edges, revision, workflow.id, workflowTitle]
+  );
+
+  // Conflict resolution handlers
+  const handleAcceptServerConflict = useCallback(() => {
+    if (!conflictWorkflow) return;
+    setWorkflow(conflictWorkflow);
+    setWorkflowTitle(conflictWorkflow.name);
+    setRevision(conflictWorkflow.revision);
+    setNodes(
+      (conflictWorkflow.graph?.nodes || []).map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: n.data,
+      }))
+    );
+    setEdges(
+      (conflictWorkflow.graph?.edges || []).map((e) => ({
+        id: e.id,
+        type: 'neon',
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle,
+        targetHandle: e.targetHandle,
+        label: e.label,
+        animated: false,
+      }))
+    );
+    setIsDirty(false);
+    setSaveStatus('idle');
+    setConflictWorkflow(null);
+    showToast('info', `Loaded server revision v${conflictWorkflow.revision}.`);
+  }, [conflictWorkflow, setNodes, setEdges]);
+
+  const handleForceOverwriteConflict = useCallback(() => {
+    if (!conflictWorkflow) return;
+    const serverRev = conflictWorkflow.revision;
+    setConflictWorkflow(null);
+    handleSaveWorkflow(serverRev);
+  }, [conflictWorkflow, handleSaveWorkflow]);
+
+  // Track node / edge changes to dirty state
+  const handleNodesChange = useCallback(
+    (changes: any) => {
+      onNodesChange(changes);
+      const isDragStop = changes.some((c: any) => c.type === 'position' && c.dragging === false);
+      const isRemoval = changes.some((c: any) => c.type === 'remove');
+      if (isDragStop || isRemoval) {
+        setIsDirty(true);
+      }
+    },
+    [onNodesChange]
+  );
+
+  const handleEdgesChange = useCallback(
+    (changes: any) => {
+      onEdgesChange(changes);
+      if (changes.some((c: any) => c.type === 'remove')) {
+        setIsDirty(true);
+      }
+    },
+    [onEdgesChange]
+  );
 
   // Node selection
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -490,6 +691,9 @@ export const Studio: React.FC<StudioProps> = ({
         revision={revision}
         isDirty={isDirty}
         isRunning={isRunning}
+        isSaving={isSaving}
+        saveStatus={saveStatus}
+        onSave={handleSaveWorkflow}
         collaborators={INITIAL_COLLABORATORS}
         onRun={handleRun}
         onResetSample={handleResetSample}
@@ -513,8 +717,8 @@ export const Studio: React.FC<StudioProps> = ({
               <WorkflowCanvas
                 nodes={nodes}
                 edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
                 onConnect={handleConnect}
                 onNodeClick={handleNodeClick}
                 onPaneClick={handlePaneClick}
@@ -538,6 +742,7 @@ export const Studio: React.FC<StudioProps> = ({
             onDeleteNode={handleDeleteNode}
             totalNodes={nodes.length}
             totalEdges={edges.length}
+            availableIntegrations={availableIntegrations}
           />
         </div>
       )}
@@ -561,6 +766,15 @@ export const Studio: React.FC<StudioProps> = ({
           onOpenStudio={() => onViewChange?.('studio')}
         />
       )}
+
+      {/* Revision Conflict Resolution Modal */}
+      <ConflictModal
+        isOpen={conflictWorkflow !== null}
+        serverWorkflow={conflictWorkflow}
+        localRevision={revision}
+        onAcceptServer={handleAcceptServerConflict}
+        onForceOverwrite={handleForceOverwriteConflict}
+      />
     </div>
   );
 };

@@ -50,7 +50,7 @@ export function evaluateOutput(node: RelayNode, inputPayload: Record<string, any
   const outputPayload = {
     ...domainOutput,
     _relayMetadata: {
-      deliveredTo: destination,
+      deliveredTo: destination === 'integration' && (config as any).integrationId ? `integration:${(config as any).integrationId}` : destination,
       label,
       deliveredAt: new Date().toISOString()
     }

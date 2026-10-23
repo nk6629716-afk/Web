@@ -129,6 +129,14 @@ export async function runWorkflow(graph, options = {}) {
                 case 'output': {
                     const res = evaluateOutput(node, combinedInput);
                     stepOutput = res.output;
+                    const config = (node.data?.config || {});
+                    if (config.destination === 'integration' && config.integrationId && options.integrationInvoker) {
+                        const invokerResult = await options.integrationInvoker(config.integrationId, combinedInput, config);
+                        stepOutput = {
+                            ...stepOutput,
+                            _integrationResult: invokerResult
+                        };
+                    }
                     finalOutputs[node.id] = stepOutput;
                     break;
                 }

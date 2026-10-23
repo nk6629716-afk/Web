@@ -1,4 +1,4 @@
-import { ApiKey, ApiKeyScope, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
+import { ApiKey, ApiKeyScope, AppIntegration, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
 
 export interface SaveWorkflowResult {
   success: boolean;
@@ -36,10 +36,20 @@ export interface IApiKeyRepository {
   updateLastUsed(id: string): Promise<void>;
 }
 
+export interface IIntegrationRepository {
+  create(data: Omit<AppIntegration, 'id' | 'createdAt' | 'updatedAt'> & { secret?: string }): Promise<AppIntegration>;
+  update(id: string, updates: Partial<AppIntegration> & { secret?: string }): Promise<AppIntegration>;
+  getById(id: string): Promise<AppIntegration | null>;
+  listByProject(projectId: string): Promise<AppIntegration[]>;
+  delete(id: string, projectId: string): Promise<boolean>;
+  getDecryptedSecret(id: string): Promise<string | null>;
+}
+
 export interface IRepositories {
   workflows: IWorkflowRepository;
   executions: IExecutionRepository;
   projects: IProjectRepository;
   apiKeys: IApiKeyRepository;
+  integrations: IIntegrationRepository;
 }
 

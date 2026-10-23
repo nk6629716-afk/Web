@@ -5,6 +5,10 @@ import { runWorkflow, validateGraphForExecution } from '@relay/engine';
 import { SEEDED_SAMPLE_WORKFLOW } from '@relay/shared';
 import { 
   createApiKeyRouter, 
+  createWorkflowRunRouter,
+  createRunsRouter,
+  createIntegrationRouter,
+  createIntegrationInvoker,
   requestContextMiddleware, 
   sendApiError, 
   ApiError 
@@ -27,12 +31,17 @@ export function createServer(
   const v1Router = express.Router();
   v1Router.use(requestContextMiddleware());
   v1Router.use('/api-keys', createApiKeyRouter(repos));
+  v1Router.use('/workflows', createWorkflowRunRouter(repos));
+  v1Router.use('/runs', createRunsRouter(repos));
 
   if (options?.configure) {
     options.configure(app, v1Router);
   }
 
   app.use('/api/v1', v1Router);
+
+  // Mount integrations management routes
+  app.use('/api/integrations', createIntegrationRouter(repos));
 
 
   // GET /api/health
@@ -270,6 +279,7 @@ export function createServer(
       const summary = await runWorkflow(activeGraph, {
         executionId: execution.id,
         runtimeInput: input,
+        integrationInvoker: createIntegrationInvoker(repos),
         onStepComplete: async (step) => {
           if (dbPersistenceAvailable) {
             try { await repos.executions.recordStep(step); } catch {}

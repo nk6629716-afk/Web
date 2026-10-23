@@ -1,5 +1,5 @@
-import { ApiKey, ApiKeyScope, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
-import { IApiKeyRepository, IExecutionRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
+import { ApiKey, ApiKeyScope, AppIntegration, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
+import { IApiKeyRepository, IExecutionRepository, IIntegrationRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
 export declare class InMemoryWorkflowRepository implements IWorkflowRepository {
     private workflows;
     private versions;
@@ -48,6 +48,21 @@ export declare class InMemoryApiKeyRepository implements IApiKeyRepository {
     listByProject(projectId: string): Promise<ApiKey[]>;
     revoke(id: string, projectId: string): Promise<boolean>;
     updateLastUsed(id: string): Promise<void>;
+}
+export declare function encryptCredential(plainText: string): string;
+export declare function decryptCredential(cipherText: string): string;
+export declare class InMemoryIntegrationRepository implements IIntegrationRepository {
+    private integrations;
+    create(data: Omit<AppIntegration, 'id' | 'createdAt' | 'updatedAt'> & {
+        secret?: string;
+    }): Promise<AppIntegration>;
+    update(id: string, updates: Partial<AppIntegration> & {
+        secret?: string;
+    }): Promise<AppIntegration>;
+    getById(id: string): Promise<AppIntegration | null>;
+    listByProject(projectId: string): Promise<AppIntegration[]>;
+    delete(id: string, projectId: string): Promise<boolean>;
+    getDecryptedSecret(id: string): Promise<string | null>;
 }
 export declare function createInMemoryRepositories(): IRepositories;
 //# sourceMappingURL=InMemoryRepository.d.ts.map

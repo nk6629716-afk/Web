@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { encryptCredential, decryptCredential } from './InMemoryRepository';
 export function formatSupabaseError(error, operation) {
     const msg = error?.message || (typeof error === 'string' ? error : 'Unknown database error');
     if (msg.includes('Could not find the table') || msg.includes('schema cache') || msg.includes('does not exist')) {
@@ -441,13 +442,163 @@ export class SupabaseApiKeyRepository {
             .eq('id', id);
     }
 }
+export class SupabaseIntegrationRepository {
+    client;
+    constructor(client) {
+        this.client = client;
+    }
+    mapRow(row) {
+        return {
+            id: row.id,
+            projectId: row.project_id,
+            name: row.name,
+            appType: row.app_type,
+            baseUrl: row.base_url,
+            httpMethod: row.http_method,
+            authType: row.auth_type,
+            encryptedAuth: row.encrypted_auth,
+            authHeaderName: row.auth_header_name,
+            headers: row.headers || {},
+            timeoutMs: row.timeout_ms,
+            testEndpoint: row.test_endpoint,
+            testMethod: row.test_method,
+            status: row.status,
+            lastTestedAt: row.last_tested_at,
+            lastTestStatus: row.last_test_status,
+            lastTestMessage: row.last_test_message,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+        };
+    }
+    async create(data) {
+        const encryptedAuth = data.secret ? encryptCredential(data.secret) : data.encryptedAuth;
+        const { data: inserted, error } = await this.client
+            .from('app_integrations')
+            .insert({
+            project_id: data.projectId,
+            name: data.name,
+            app_type: data.appType || 'generic_http',
+            base_url: data.baseUrl,
+            http_method: data.httpMethod || 'POST',
+            auth_type: data.authType || 'none',
+            encrypted_auth: encryptedAuth,
+            auth_header_name: data.authHeaderName,
+            headers: data.headers || {},
+            timeout_ms: data.timeoutMs || 5000,
+            test_endpoint: data.testEndpoint,
+            test_method: data.testMethod || 'GET',
+            status: data.status || 'active'
+        })
+            .select('*')
+            .single();
+        if (error) {
+            throw formatSupabaseError(error, 'create integration');
+        }
+        return this.mapRow(inserted);
+    }
+    async update(id, updates) {
+        const payload = {
+            updated_at: new Date().toISOString()
+        };
+        if (updates.name !== undefined)
+            payload.name = updates.name;
+        if (updates.baseUrl !== undefined)
+            payload.base_url = updates.baseUrl;
+        if (updates.httpMethod !== undefined)
+            payload.http_method = updates.httpMethod;
+        if (updates.authType !== undefined)
+            payload.auth_type = updates.authType;
+        if (updates.authHeaderName !== undefined)
+            payload.auth_header_name = updates.authHeaderName;
+        if (updates.headers !== undefined)
+            payload.headers = updates.headers;
+        if (updates.timeoutMs !== undefined)
+            payload.timeout_ms = updates.timeoutMs;
+        if (updates.testEndpoint !== undefined)
+            payload.test_endpoint = updates.testEndpoint;
+        if (updates.testMethod !== undefined)
+            payload.test_method = updates.testMethod;
+        if (updates.status !== undefined)
+            payload.status = updates.status;
+        if (updates.lastTestedAt !== undefined)
+            payload.last_tested_at = updates.lastTestedAt;
+        if (updates.lastTestStatus !== undefined)
+            payload.last_test_status = updates.lastTestStatus;
+        if (updates.lastTestMessage !== undefined)
+            payload.last_test_message = updates.lastTestMessage;
+        if (updates.secret !== undefined) {
+            payload.encrypted_auth = encryptCredential(updates.secret);
+        }
+        else if (updates.encryptedAuth !== undefined) {
+            payload.encrypted_auth = updates.encryptedAuth;
+        }
+        const { data: updated, error } = await this.client
+            .from('app_integrations')
+            .update(payload)
+            .eq('id', id)
+            .select('*')
+            .single();
+        if (error) {
+            throw formatSupabaseError(error, `update integration ${id}`);
+        }
+        return this.mapRow(updated);
+    }
+    async getById(id) {
+        const { data, error } = await this.client
+            .from('app_integrations')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error || !data)
+            return null;
+        return this.mapRow(data);
+    }
+    async listByProject(projectId) {
+        const { data, error } = await this.client
+            .from('app_integrations')
+            .select('*')
+            .eq('project_id', projectId)
+            .order('created_at', { ascending: false });
+        if (error || !data)
+            return [];
+        return data.map((d) => this.mapRow(d));
+    }
+    async delete(id, projectId) {
+        const { data, error } = await this.client
+            .from('app_integrations')
+            .delete()
+            .eq('id', id)
+            .eq('project_id', projectId)
+            .select('id')
+            .single();
+        if (error || !data)
+            return false;
+        return true;
+    }
+    async getDecryptedSecret(id) {
+        const { data, error } = await this.client
+            .from('app_integrations')
+            .select('encrypted_auth')
+            .eq('id', id)
+            .single();
+        if (error || !data || !data.encrypted_auth)
+            return null;
+        try {
+            return decryptCredential(data.encrypted_auth);
+        }
+        catch {
+            return null;
+        }
+    }
+}
 export function createSupabaseRepositories(url, serviceRoleKey) {
     const client = createClient(url, serviceRoleKey);
     return {
         workflows: new SupabaseWorkflowRepository(client),
         executions: new SupabaseExecutionRepository(client),
         projects: new SupabaseProjectRepository(client),
-        apiKeys: new SupabaseApiKeyRepository(client)
+        apiKeys: new SupabaseApiKeyRepository(client),
+        integrations: new SupabaseIntegrationRepository(client)
     };
 }
 //# sourceMappingURL=SupabaseRepository.js.map

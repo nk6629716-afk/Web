@@ -8,7 +8,11 @@ import {
   Layers, 
   Folder, 
   Zap, 
-  FolderPlus 
+  FolderPlus,
+  Save,
+  Loader2,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { Collaborator } from '@relay/shared';
 import { NeumoButton } from '../ui/NeumoButton';
@@ -27,6 +31,9 @@ interface HeaderProps {
   onResetSample: () => void;
   onValidate: () => void;
   onClear: () => void;
+  onSave?: () => void;
+  isSaving?: boolean;
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'failed';
   currentView?: AppView;
   onViewChange?: (view: AppView) => void;
   projectName?: string;
@@ -44,6 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
   onResetSample,
   onValidate,
   onClear,
+  onSave,
+  isSaving = false,
+  saveStatus = 'idle',
   currentView = 'studio',
   onViewChange,
   projectName = 'Default Workspace',
@@ -138,9 +148,28 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Status Indicator with LED */}
             <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#24262b] shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5)] border border-white/[0.03]">
-              <StatusLED status={isDirty ? 'idle' : 'success'} size="sm" />
-              <span className="text-[11px] font-mono text-slate-300">
-                {isDirty ? 'UNSAVED' : 'SAVED'}
+              <StatusLED
+                status={
+                  saveStatus === 'saving'
+                    ? 'cyan'
+                    : saveStatus === 'failed'
+                    ? 'failed'
+                    : isDirty
+                    ? 'idle'
+                    : 'success'
+                }
+                size="sm"
+              />
+              <span className="text-[11px] font-mono font-medium text-slate-300">
+                {saveStatus === 'saving'
+                  ? 'SAVING...'
+                  : saveStatus === 'failed'
+                  ? 'SAVE FAILED'
+                  : saveStatus === 'saved'
+                  ? 'SAVED'
+                  : isDirty
+                  ? 'UNSAVED'
+                  : 'SAVED'}
               </span>
             </div>
           </div>
@@ -178,6 +207,47 @@ export const Header: React.FC<HeaderProps> = ({
         >
           Validate
         </NeumoButton>
+
+        {/* Save Workflow Button */}
+        {onSave && (
+          <NeumoButton
+            onClick={onSave}
+            disabled={isSaving || (!isDirty && saveStatus !== 'failed')}
+            size="sm"
+            variant={isDirty ? 'primary' : 'default'}
+            className={`font-semibold tracking-wide transition-all ${
+              isDirty ? 'text-[#00bfff] shadow-[0_0_12px_rgba(0,191,255,0.2)]' : ''
+            }`}
+            icon={
+              isSaving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00bfff]" />
+              ) : saveStatus === 'saved' ? (
+                <Check className="w-3.5 h-3.5 text-[#00ff88]" />
+              ) : saveStatus === 'failed' ? (
+                <AlertTriangle className="w-3.5 h-3.5 text-[#ff3366]" />
+              ) : (
+                <Save className={`w-3.5 h-3.5 ${isDirty ? 'text-[#00bfff]' : 'text-slate-400'}`} />
+              )
+            }
+            title={
+              isSaving
+                ? 'Saving workflow to database...'
+                : saveStatus === 'failed'
+                ? 'Save failed — click to retry'
+                : isDirty
+                ? 'Save current workflow nodes and configuration'
+                : 'All changes saved'
+            }
+          >
+            {isSaving
+              ? 'SAVING...'
+              : saveStatus === 'saved'
+              ? 'SAVED'
+              : saveStatus === 'failed'
+              ? 'RETRY SAVE'
+              : 'SAVE'}
+          </NeumoButton>
+        )}
 
         {/* Reset Sample Button */}
         <NeumoButton

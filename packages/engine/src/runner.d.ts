@@ -7,6 +7,7 @@ export interface ExecuteOptions {
     onStepComplete?: (step: ExecutionStep) => void | Promise<void>;
     onStepFailed?: (step: ExecutionStep) => void | Promise<void>;
     onStepSkipped?: (step: ExecutionStep) => void | Promise<void>;
+    integrationInvoker?: (integrationId: string, payload: Record<string, any>, config?: Record<string, any>) => Promise<any>;
 }
 export interface ExecutionSummary {
     executionId: string;

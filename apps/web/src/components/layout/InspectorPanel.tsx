@@ -5,8 +5,9 @@ import {
   NodeType,
   TransformOperation,
   WorkflowNode,
+  AppIntegrationSafeResponse,
 } from '@relay/shared';
-import { Settings, Terminal, Trash2, Layers, Cpu } from 'lucide-react';
+import { Settings, Terminal, Trash2, Layers, Cpu, Globe } from 'lucide-react';
 import { StatusLED, LEDStatus } from '../ui/StatusLED';
 import { NeumoButton } from '../ui/NeumoButton';
 import { NeumoInput, NeumoTextarea, NeumoSelect } from '../ui/NeumoInput';
@@ -18,6 +19,7 @@ interface InspectorPanelProps {
   onDeleteNode: (nodeId: string) => void;
   totalNodes: number;
   totalEdges: number;
+  availableIntegrations?: AppIntegrationSafeResponse[];
 }
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
@@ -27,6 +29,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   onDeleteNode,
   totalNodes,
   totalEdges,
+  availableIntegrations = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'config' | 'execution'>('config');
 
@@ -259,6 +262,58 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
             {type === 'output' && (
               <div className="space-y-3">
+                <NeumoSelect
+                  label="Destination Target"
+                  value={config.destination || 'response'}
+                  onChange={(e) => handleConfigChange('destination', e.target.value)}
+                >
+                  <option value="response">Synchronous API Response</option>
+                  <option value="integration">External Connected App (CityPulse / Webhook)</option>
+                </NeumoSelect>
+
+                {config.destination === 'integration' && (
+                  <div className="p-3 rounded-xl bg-[#24262b] border border-white/[0.04] space-y-3 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
+                    <NeumoSelect
+                      label="Select Connected App"
+                      value={config.integrationId || ''}
+                      onChange={(e) => handleConfigChange('integrationId', e.target.value)}
+                    >
+                      <option value="">-- Choose Integration --</option>
+                      {availableIntegrations.map((integ) => (
+                        <option key={integ.id} value={integ.id}>
+                          {integ.name} ({integ.baseUrl})
+                        </option>
+                      ))}
+                    </NeumoSelect>
+
+                    {availableIntegrations.length === 0 && (
+                      <p className="text-[10px] text-amber-400">
+                        No integrations configured. Add one in the Integrations dashboard tab.
+                      </p>
+                    )}
+
+                    <NeumoInput
+                      label="Endpoint Sub-path (Optional)"
+                      value={config.endpointPath || ''}
+                      onChange={(e) => handleConfigChange('endpointPath', e.target.value)}
+                      placeholder="e.g. /api/v1/civic/issues"
+                    />
+
+                    {config.integrationId && (
+                      (() => {
+                        const sel = availableIntegrations.find((i) => i.id === config.integrationId);
+                        if (!sel) return null;
+                        return (
+                          <div className="p-2 rounded-lg bg-[#202226] text-[10px] font-mono text-slate-400 space-y-0.5 border border-white/[0.02]">
+                            <div><span className="text-slate-500">Target:</span> {sel.baseUrl}{config.endpointPath || ''}</div>
+                            <div><span className="text-slate-500">Method:</span> {sel.httpMethod} • <span className="text-slate-500">Auth:</span> {sel.authType.toUpperCase()}</div>
+                          </div>
+                        );
+                      })()
+                    )}
+                  </div>
+                )}
+
                 <NeumoInput
                   label="Destination Title"
                   value={config.title || ''}
@@ -267,7 +322,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 />
 
                 <NeumoTextarea
-                  label="Message Template"
+                  label="Message Template (Optional)"
                   rows={3}
                   value={config.messageTemplate || ''}
                   onChange={(e) => handleConfigChange('messageTemplate', e.target.value)}

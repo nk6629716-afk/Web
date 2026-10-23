@@ -14,6 +14,7 @@ export interface ExecuteOptions {
   onStepComplete?: (step: ExecutionStep) => void | Promise<void>;
   onStepFailed?: (step: ExecutionStep) => void | Promise<void>;
   onStepSkipped?: (step: ExecutionStep) => void | Promise<void>;
+  integrationInvoker?: (integrationId: string, payload: Record<string, any>, config?: Record<string, any>) => Promise<any>;
 }
 
 export interface ExecutionSummary {
@@ -169,6 +170,16 @@ export async function runWorkflow(
         case 'output': {
           const res = evaluateOutput(node, combinedInput);
           stepOutput = res.output;
+
+          const config = (node.data?.config || {}) as any;
+          if (config.destination === 'integration' && config.integrationId && options.integrationInvoker) {
+            const invokerResult = await options.integrationInvoker(config.integrationId, combinedInput, config);
+            stepOutput = {
+              ...stepOutput,
+              _integrationResult: invokerResult
+            };
+          }
+
           finalOutputs[node.id] = stepOutput;
           break;
         }

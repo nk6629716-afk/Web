@@ -16,13 +16,22 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Plus,
+  Trash2,
+  Globe,
+  KeyRound,
+  CheckCircle,
+  XCircle,
+  Activity,
+  Radio
 } from 'lucide-react';
-import { Workflow, Project } from '@relay/shared';
+import { Workflow, AppIntegrationSafeResponse, TestConnectionResult } from '@relay/shared';
 import { api, getApiBaseUrl, ExecutionResponse } from '../lib/api';
 import { NeumoButton } from './ui/NeumoButton';
 import { NeumoCard } from './ui/NeumoCard';
 import { StatusLED } from './ui/StatusLED';
+import { ConnectAppModal } from './ConnectAppModal';
 
 interface IntegrationsViewProps {
   currentWorkflowId?: string;
@@ -36,6 +45,13 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(currentWorkflowId);
   const [activeTab, setActiveTab] = useState<'curl' | 'javascript' | 'nodejs' | 'python' | 'civicconnect'>('civicconnect');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Integrations state
+  const [integrations, setIntegrations] = useState<AppIntegrationSafeResponse[]>([]);
+  const [isIntegrationsLoading, setIsIntegrationsLoading] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null);
+  const [testFeedback, setTestFeedback] = useState<Record<string, TestConnectionResult>>({});
 
   // Health and test states
   const [healthStatus, setHealthStatus] = useState<{ status: string; uptimeSeconds: number } | null>(null);
@@ -60,6 +76,19 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   const baseUrl = getApiBaseUrl() || (typeof window !== 'undefined' ? window.location.origin : 'https://relay-api-bo0p.onrender.com');
   const executionEndpoint = `${baseUrl}/api/workflows/${selectedWorkflowId}/execute`;
 
+  // Fetch Integrations list
+  const fetchIntegrations = async () => {
+    setIsIntegrationsLoading(true);
+    try {
+      const list = await api.getIntegrations();
+      setIntegrations(list);
+    } catch (err) {
+      console.error('Failed to load integrations:', err);
+    } finally {
+      setIsIntegrationsLoading(false);
+    }
+  };
+
   const fetchHealth = async () => {
     setIsHealthLoading(true);
     try {
@@ -74,6 +103,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
 
   useEffect(() => {
     fetchHealth();
+    fetchIntegrations();
   }, []);
 
   const handleCopy = (key: string, text: string) => {
@@ -82,6 +112,39 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
     setTimeout(() => {
       setCopiedKey((curr) => (curr === key ? null : curr));
     }, 2000);
+  };
+
+  // Test individual saved integration
+  const handleTestIntegration = async (id: string) => {
+    setTestingIntegrationId(id);
+    try {
+      const res = await api.testIntegration(id);
+      setTestFeedback((prev) => ({ ...prev, [id]: res }));
+      // Refresh list to show updated lastTestedAt and lastTestStatus
+      await fetchIntegrations();
+    } catch (err: any) {
+      setTestFeedback((prev) => ({
+        ...prev,
+        [id]: {
+          success: false,
+          durationMs: 0,
+          message: err.message || 'Connection failed'
+        }
+      }));
+    } finally {
+      setTestingIntegrationId(null);
+    }
+  };
+
+  // Delete integration
+  const handleDeleteIntegration = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to disconnect integration "${name}"?`)) return;
+    try {
+      await api.deleteIntegration(id);
+      setIntegrations((prev) => prev.filter((i) => i.id !== id));
+    } catch (err: any) {
+      alert(`Failed to delete integration: ${err.message}`);
+    }
   };
 
   const handleRunTest = async () => {
@@ -180,14 +243,14 @@ print("Execution Status:", data["summary"]["status"])
 print("Step Outputs:", data["summary"]["steps"])`,
 
     civicconnect: `/**
- * CIVICCONNECT — Resilient 5-Step Backend Integration Pattern
+ * CIVICCONNECT & CITYPULSE — Resilient Inbound & Outbound Integration
  * 
- * Flow:
- * 1. Validate & store citizen report in CivicConnect DB FIRST.
- * 2. Dispatch execution request to Relay Workflow.
- * 3. Update report with Relay execution ID & status.
- * 4. Return instant confirmation to citizen.
- * 5. Background queue retries if Relay is temporarily unreachable.
+ * Inbound Flow:
+ * 1. Citizen submits issue to CityPulse / CivicConnect.
+ * 2. CityPulse dispatches incident payload to Relay endpoint:
+ *    POST /api/v1/workflows/:id/runs (or /api/workflows/:id/execute)
+ * 3. Relay evaluates conditions and routes issue to appropriate civic action.
+ * 4. Configured external integration dispatches update back to municipal gateway.
  */
 
 import { Router } from 'express';
@@ -196,7 +259,7 @@ const router = Router();
 const RELAY_WORKFLOW_URL = "${executionEndpoint}";
 
 router.post('/api/reports', async (req, res) => {
-  // 1. Save citizen report to CivicConnect database first (prevents data loss)
+  // 1. Save citizen report to local database first (prevents data loss)
   const report = await civicDb.reports.create({
     citizenEmail: req.body.email,
     category: req.body.category || 'Road Hazard',
@@ -208,28 +271,24 @@ router.post('/api/reports', async (req, res) => {
     // 2. Invoke Relay workflow with report payload
     const relayResponse = await fetch(RELAY_WORKFLOW_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + process.env.RELAY_API_KEY 
+      },
       body: JSON.stringify({
         input: {
-          orderId: report.id,
-          customer: report.citizenEmail,
-          amount: req.body.estimatedImpact || 5000,
-          reason: report.details
+          issueId: report.id,
+          category: report.category,
+          severity: req.body.severity || 'medium',
+          ward: req.body.ward || '12',
+          details: report.details
         }
       }),
-      signal: AbortSignal.timeout(8000) // 8s safety timeout
+      signal: AbortSignal.timeout(8000)
     });
 
     const { execution, summary } = await relayResponse.json();
 
-    // 3. Update local CivicConnect record with verified execution output
-    await civicDb.reports.update(report.id, {
-      relayExecutionId: execution.id,
-      relayStatus: summary.status,
-      processedAt: new Date().toISOString()
-    });
-
-    // 4. Return successful response with tracking
     return res.status(201).json({
       success: true,
       reportId: report.id,
@@ -237,15 +296,11 @@ router.post('/api/reports', async (req, res) => {
       status: summary.status
     });
   } catch (err) {
-    console.error('Relay execution deferred, queuing retry:', err);
-    // 5. If Relay is temporarily offline, enqueue retry without dropping citizen report!
-    await retryQueue.enqueue({ reportId: report.id });
-
+    console.error('Relay deferred, queued for retry:', err);
     return res.status(202).json({
       success: true,
       reportId: report.id,
-      status: 'queued_for_automation',
-      message: 'Report received and queued for workflow triage.'
+      status: 'queued_for_automation'
     });
   }
 });`
@@ -254,29 +309,43 @@ router.post('/api/reports', async (req, res) => {
   return (
     <div className="flex-1 overflow-y-auto bg-[#292b30] p-8 text-slate-100 select-none">
       <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
+        {/* Header with "+ Connect App" button */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.05]">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-black tracking-wide uppercase text-slate-100">
-                External App & Web Integration
+                Integrations Dashboard
               </h1>
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono border bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/20">
                 <StatusLED status="success" size="sm" />
-                <span>REST API ACTIVE</span>
+                <span>ACTIVE CONNECTORS</span>
               </div>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Connect CivicConnect and third-party web apps to trigger Relay automation workflows
+              Connect CityPulse, municipal services, and generic HTTP endpoints with encrypted credentials
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Primary "+ Connect App" button */}
             <NeumoButton
-              onClick={fetchHealth}
+              onClick={() => setIsConnectModalOpen(true)}
+              variant="primary"
+              size="md"
+              icon={<Plus className="w-4 h-4 text-[#00bfff]" />}
+              className="font-bold tracking-wide shadow-[3px_3px_8px_rgba(0,0,0,0.5),-3px_-3px_8px_rgba(255,255,255,0.08)]"
+            >
+              + Connect App
+            </NeumoButton>
+
+            <NeumoButton
+              onClick={() => {
+                fetchHealth();
+                fetchIntegrations();
+              }}
               size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isHealthLoading ? 'animate-spin' : ''}`} />}
-              title="Refresh health check"
+              icon={<RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isHealthLoading || isIntegrationsLoading ? 'animate-spin' : ''}`} />}
+              title="Refresh integrations"
             />
             {onOpenStudio && (
               <NeumoButton
@@ -290,58 +359,203 @@ router.post('/api/reports', async (req, res) => {
           </div>
         </div>
 
-        {/* Live Service Status Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <NeumoCard variant="recess-sm" className="p-4 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-[#23252a] flex items-center justify-center text-[#00bfff] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
-              <Server className="w-4 h-4" />
+        {/* Section 1: Connected Applications */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#00bfff]/20 text-[#00bfff] inline-flex items-center justify-center text-[11px]">1</span>
+                Connected External Applications ({integrations.length})
+              </h2>
             </div>
-            <div>
-              <div className="text-[10px] font-mono text-slate-400 uppercase">Relay Backend</div>
-              <div className="text-xs font-bold text-slate-100 truncate">
-                {baseUrl.replace(/https?:\/\//, '')}
-              </div>
-            </div>
-          </NeumoCard>
+            <span className="text-[11px] text-slate-400">
+              Selectable from workflow Output & Action nodes
+            </span>
+          </div>
 
-          <NeumoCard variant="recess-sm" className="p-4 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-[#23252a] flex items-center justify-center text-[#00ff88] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
-              <Zap className="w-4 h-4" />
+          {isIntegrationsLoading && (
+            <div className="p-8 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-[#00bfff]" />
+              <span className="text-xs font-mono">Loading connected applications...</span>
             </div>
-            <div>
-              <div className="text-[10px] font-mono text-slate-400 uppercase">Target Workflow</div>
-              <div className="text-xs font-mono font-bold text-[#00bfff]">
-                {selectedWorkflowId}
-              </div>
-            </div>
-          </NeumoCard>
+          )}
 
-          <NeumoCard variant="recess-sm" className="p-4 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-[#23252a] flex items-center justify-center text-[#ffaa00] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono text-slate-400 uppercase">CivicConnect Status</div>
-              <div className="text-xs font-bold text-slate-200">
-                {testResult ? (
-                  <span className="text-[#00ff88]">Verified & Tested</span>
-                ) : (
-                  <span>Ready to Connect</span>
-                )}
+          {!isIntegrationsLoading && integrations.length === 0 && (
+            <NeumoCard variant="recess" className="p-8 text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#24262b] text-[#00bfff] mx-auto flex items-center justify-center shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5)]">
+                <Globe className="w-6 h-6" />
               </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-200">No External Apps Connected Yet</h3>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Connect CityPulse or your custom REST backend so Relay workflows can dispatch actions, POST notifications, and update external databases.
+                </p>
+              </div>
+              <NeumoButton
+                onClick={() => setIsConnectModalOpen(true)}
+                variant="primary"
+                size="md"
+                icon={<Plus className="w-4 h-4 text-[#00bfff]" />}
+                className="font-bold mx-auto"
+              >
+                + Connect CityPulse or Custom App
+              </NeumoButton>
+            </NeumoCard>
+          )}
+
+          {!isIntegrationsLoading && integrations.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {integrations.map((integ) => {
+                const feedback = testFeedback[integ.id];
+                const isTestingThis = testingIntegrationId === integ.id;
+                const statusLed: any =
+                  integ.lastTestStatus === 'succeeded'
+                    ? 'success'
+                    : integ.lastTestStatus === 'failed'
+                    ? 'failed'
+                    : 'idle';
+
+                return (
+                  <NeumoCard
+                    key={integ.id}
+                    variant="protrude-sm"
+                    className="p-5 flex flex-col justify-between space-y-4 border border-white/[0.03]"
+                  >
+                    <div>
+                      {/* Top Bar */}
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <StatusLED status={statusLed} size="sm" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-slate-100">{integ.name}</h3>
+                              {integ.appType === 'citypulse' && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#00bfff]/20 text-[#00bfff] font-bold">
+                                  CITYPULSE
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-mono text-slate-400 truncate block max-w-xs">
+                              {integ.baseUrl}
+                            </span>
+                          </div>
+                        </div>
+
+                        <NeumoButton
+                          onClick={() => handleDeleteIntegration(integ.id, integ.name)}
+                          size="sm"
+                          variant="danger"
+                          icon={<Trash2 className="w-3.5 h-3.5 text-[#ff3366]" />}
+                          title="Disconnect Integration"
+                        />
+                      </div>
+
+                      {/* Badges strip */}
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono pt-2 border-t border-white/[0.04]">
+                        <span className="px-2 py-0.5 rounded bg-[#24262b] text-slate-300 font-bold border border-white/[0.03]">
+                          {integ.httpMethod}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-[#24262b] text-[#ffaa00] border border-white/[0.03] flex items-center gap-1">
+                          <KeyRound className="w-2.5 h-2.5" />
+                          {integ.authType.toUpperCase()}
+                        </span>
+                        {integ.hasSecret && (
+                          <span className="px-2 py-0.5 rounded bg-[#00ff88]/10 text-[#00ff88] border border-[#00ff88]/20 flex items-center gap-1">
+                            <ShieldCheck className="w-2.5 h-2.5" />
+                            {integ.maskedSecret}
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded bg-[#24262b] text-slate-400">
+                          {integ.timeoutMs}ms timeout
+                        </span>
+                        {integ.testEndpoint && (
+                          <span className="px-2 py-0.5 rounded bg-[#24262b] text-slate-400">
+                            Probe: {integ.testEndpoint}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Connection Test Status Plaque */}
+                      <div className="mt-3 p-2.5 rounded-lg bg-[#24262b] border border-white/[0.02] text-[11px] font-mono">
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Health Status:</span>
+                          {integ.lastTestStatus ? (
+                            <span
+                              className={`font-bold ${
+                                integ.lastTestStatus === 'succeeded' ? 'text-[#00ff88]' : 'text-[#ff5580]'
+                              }`}
+                            >
+                              {integ.lastTestStatus.toUpperCase()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Not Tested Yet</span>
+                          )}
+                        </div>
+                        {integ.lastTestMessage && (
+                          <div className="text-[10px] text-slate-400 mt-1 truncate">
+                            {integ.lastTestMessage}
+                          </div>
+                        )}
+                        {integ.lastTestedAt && (
+                          <div className="text-[9px] text-slate-500 mt-0.5">
+                            Last checked: {new Date(integ.lastTestedAt).toLocaleTimeString()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Immediate Test Feedback */}
+                      {feedback && (
+                        <div
+                          className={`mt-2 p-2 rounded-lg text-[10px] font-mono flex items-center gap-2 border ${
+                            feedback.success
+                              ? 'bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/20'
+                              : 'bg-[#ff3366]/10 text-[#ff5580] border-[#ff3366]/20'
+                          }`}
+                        >
+                          <StatusLED status={feedback.success ? 'success' : 'failed'} size="sm" />
+                          <span>
+                            {feedback.message} ({feedback.durationMs}ms)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
+                      <span className="text-[10px] font-mono text-slate-400">
+                        ID: <span className="text-slate-300">{integ.id}</span>
+                      </span>
+                      <NeumoButton
+                        onClick={() => handleTestIntegration(integ.id)}
+                        disabled={isTestingThis}
+                        size="sm"
+                        icon={
+                          isTestingThis ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00bfff]" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 text-[#00ff88]" />
+                          )
+                        }
+                      >
+                        {isTestingThis ? 'Testing...' : 'Test Connection'}
+                      </NeumoButton>
+                    </div>
+                  </NeumoCard>
+                );
+              })}
             </div>
-          </NeumoCard>
+          )}
         </div>
 
-        {/* Step 1: Endpoint & Contract Inspector */}
+        {/* Section 2: Inbound Webhook Contract */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#00bfff]/20 text-[#00bfff] inline-flex items-center justify-center text-[11px]">1</span>
-              Verified HTTP API Contract
+              <span className="w-5 h-5 rounded-full bg-[#00ff88]/20 text-[#00ff88] inline-flex items-center justify-center text-[11px]">2</span>
+              Inbound Webhook Contract & Target Workflow
             </h2>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-slate-400">Workflow ID:</span>
+              <span className="text-[10px] font-mono text-slate-400">Target Workflow:</span>
               <input
                 type="text"
                 value={selectedWorkflowId}
@@ -372,30 +586,30 @@ router.post('/api/reports', async (req, res) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div className="space-y-1.5">
-                <span className="text-[11px] text-slate-400">Headers:</span>
+                <span className="text-[11px] text-slate-400">Inbound Format:</span>
                 <div className="p-2.5 rounded-lg bg-[#23252a] text-slate-300 border border-white/[0.03]">
-                  Content-Type: application/json
+                  Accepts direct CityPulse JSON or {"{ input: ... }"}
                 </div>
               </div>
               <div className="space-y-1.5">
-                <span className="text-[11px] text-slate-400">Response Format:</span>
+                <span className="text-[11px] text-slate-400">Authentication:</span>
                 <div className="p-2.5 rounded-lg bg-[#23252a] text-slate-300 border border-white/[0.03]">
-                  200 OK — JSON (execution + summary)
+                  Authorization: Bearer rl_live_... (API Key)
                 </div>
               </div>
             </div>
           </NeumoCard>
         </div>
 
-        {/* Step 2: Interactive Live Test Runner */}
+        {/* Section 3: Interactive Live Test Runner */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#00ff88]/20 text-[#00ff88] inline-flex items-center justify-center text-[11px]">2</span>
-              Interactive Live Test Runner
+              <span className="w-5 h-5 rounded-full bg-[#ffaa00]/20 text-[#ffaa00] inline-flex items-center justify-center text-[11px]">3</span>
+              Live Workflow Execution Test Runner
             </h2>
             <span className="text-[11px] text-slate-400">
-              Sends real request to Relay execution engine
+              Dispatches execution through full engine pipeline
             </span>
           </div>
 
@@ -405,17 +619,18 @@ router.post('/api/reports', async (req, res) => {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono font-semibold text-slate-300">
-                    Input JSON Payload (Trigger Node):
+                    Inbound Civic Incident Payload (JSON):
                   </span>
                   <button
                     onClick={() =>
                       setTestPayload(
                         JSON.stringify(
                           {
-                            orderId: `CIVIC-${Date.now().toString().slice(-4)}`,
-                            amount: 15000,
-                            customer: '  ALEX CHEN  ',
-                            reason: 'High impact street lighting outage'
+                            issueId: `CP-${Date.now().toString().slice(-4)}`,
+                            category: 'pothole',
+                            severity: 'high',
+                            ward: '12',
+                            details: 'Hazardous road cavity near intersection'
                           },
                           null,
                           2
@@ -424,7 +639,7 @@ router.post('/api/reports', async (req, res) => {
                     }
                     className="text-[11px] text-[#00bfff] hover:underline"
                   >
-                    Reset Sample
+                    CityPulse Sample
                   </button>
                 </div>
                 <textarea
@@ -437,7 +652,7 @@ router.post('/api/reports', async (req, res) => {
 
               <div className="flex items-center justify-between pt-2">
                 <span className="text-[11px] text-slate-400">
-                  Node evaluators: <span className="text-slate-200">trim_and_lowercase, condition</span>
+                  Trigger → Condition → Action
                 </span>
                 <NeumoButton
                   onClick={handleRunTest}
@@ -534,20 +749,19 @@ router.post('/api/reports', async (req, res) => {
           </div>
         </div>
 
-        {/* Step 3: Code Snippets & CivicConnect Pattern */}
+        {/* Section 4: Code Snippets & CivicConnect Pattern */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[#ffaa00]/20 text-[#ffaa00] inline-flex items-center justify-center text-[11px]">3</span>
+              <span className="w-5 h-5 rounded-full bg-[#00bfff]/20 text-[#00bfff] inline-flex items-center justify-center text-[11px]">4</span>
               Integration Code Generator
             </h2>
             <span className="text-[11px] text-slate-400">
-              Copy-pasteable integration for CivicConnect backend
+              Copy-pasteable client snippets
             </span>
           </div>
 
           <NeumoCard variant="protrude-sm" className="p-5 space-y-4">
-            {/* Tabs */}
             <div className="flex items-center gap-2 border-b border-white/[0.04] pb-3 overflow-x-auto">
               <NeumoButton
                 onClick={() => setActiveTab('civicconnect')}
@@ -556,7 +770,7 @@ router.post('/api/reports', async (req, res) => {
                 variant={activeTab === 'civicconnect' ? 'primary' : 'default'}
                 className="font-bold text-xs"
               >
-                🏛️ CivicConnect Pattern
+                🏛️ CityPulse & Civic Pattern
               </NeumoButton>
               <NeumoButton
                 onClick={() => setActiveTab('curl')}
@@ -592,7 +806,6 @@ router.post('/api/reports', async (req, res) => {
               </NeumoButton>
             </div>
 
-            {/* Code Block with Copy */}
             <div className="relative">
               <div className="absolute right-3 top-3 z-10">
                 <NeumoButton
@@ -611,18 +824,14 @@ router.post('/api/reports', async (req, res) => {
           </NeumoCard>
         </div>
 
-        {/* Security & Secrets Guidance */}
-        <div className="p-5 rounded-2xl bg-[#23252a] border border-white/[0.04] text-xs space-y-2">
-          <div className="flex items-center gap-2 text-[#00bfff] font-bold">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>Architecture & Security Best Practices</span>
-          </div>
-          <p className="text-slate-300 leading-relaxed">
-            • <strong>Backend-to-Backend:</strong> CivicConnect should call Relay from its server/API route, not directly from citizen browsers. This guarantees that API credentials and retry logic remain secure.<br />
-            • <strong>Zero Data Loss:</strong> CivicConnect saves reports to its database before invoking Relay, so an offline network spike never loses citizen submissions.<br />
-            • <strong>No Privileged Secrets in Client:</strong> Never embed Supabase Service Role keys in frontend bundles or Git repositories.
-          </p>
-        </div>
+        {/* Modal */}
+        <ConnectAppModal
+          isOpen={isConnectModalOpen}
+          onClose={() => setIsConnectModalOpen(false)}
+          onSuccess={(newInteg) => {
+            setIntegrations((prev) => [newInteg, ...prev]);
+          }}
+        />
       </div>
     </div>
   );

@@ -102,6 +102,81 @@ describe('Relay Backend API Integration Tests', () => {
     expect(errData.canonicalWorkflow).toBeDefined();
   });
 
+  it('PUT /api/workflows/:id saves and preserves custom node configurations across reloads', async () => {
+    const getRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`);
+    const { workflow } = await getRes.json();
+
+    // Create a modified graph with specific node configuration (e.g. CityPulse condition)
+    const customGraph = JSON.parse(JSON.stringify(workflow.graph));
+    const conditionNode = customGraph.nodes.find((n: any) => n.type === 'condition');
+    expect(conditionNode).toBeDefined();
+    conditionNode.data = {
+      ...conditionNode.data,
+      label: 'Severity High Check',
+      config: {
+        fieldPath: 'severity',
+        operator: 'equals',
+        targetValue: 'high',
+      },
+    };
+
+    const putRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedRevision: workflow.revision,
+        graph: customGraph,
+        name: 'CityPulse Hazard Workflow',
+      }),
+    });
+
+    expect(putRes.status).toBe(200);
+    const putData = await putRes.json();
+    expect(putData.workflow.name).toBe('CityPulse Hazard Workflow');
+
+    // Re-fetch via GET /api/workflows/:id to verify persistent retrieval
+    const reloadRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`);
+    expect(reloadRes.status).toBe(200);
+    const reloadData = await reloadRes.json();
+    expect(reloadData.workflow.name).toBe('CityPulse Hazard Workflow');
+    const reloadedCondition = reloadData.workflow.graph.nodes.find((n: any) => n.id === conditionNode.id);
+    expect(reloadedCondition.data.config.fieldPath).toBe('severity');
+    expect(reloadedCondition.data.config.targetValue).toBe('high');
+  });
+
+  it('PUT /api/workflows/:id rejects invalid graph structure with 422 INVALID_GRAPH', async () => {
+    const getRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`);
+    const { workflow } = await getRes.json();
+
+    const putRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedRevision: workflow.revision,
+        graph: { nodes: [], edges: [] }, // Invalid: no nodes
+      }),
+    });
+
+    expect(putRes.status).toBe(422);
+    const errData = await putRes.json();
+    expect(errData.code).toBe('INVALID_GRAPH');
+    expect(Array.isArray(errData.errors)).toBe(true);
+  });
+
+  it('PUT /api/workflows/:id rejects missing expectedRevision with 400 MISSING_REVISION', async () => {
+    const putRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        graph: { nodes: [], edges: [] },
+      }),
+    });
+
+    expect(putRes.status).toBe(400);
+    const errData = await putRes.json();
+    expect(errData.code).toBe('MISSING_REVISION');
+  });
+
   it('POST /api/workflows/:id/execute runs Refund Router and routes to VIP branch', async () => {
     const execRes = await fetch(`${baseUrl}/api/workflows/${SEEDED_SAMPLE_WORKFLOW.id}/execute`, {
       method: 'POST',

@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { ApiKey, ApiKeyScope, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
-import { IApiKeyRepository, IExecutionRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
+import { ApiKey, ApiKeyScope, AppIntegration, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
+import { IApiKeyRepository, IExecutionRepository, IIntegrationRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
 export declare function formatSupabaseError(error: any, operation: string): Error;
 export declare class SupabaseWorkflowRepository implements IWorkflowRepository {
     private client;
@@ -50,6 +50,21 @@ export declare class SupabaseApiKeyRepository implements IApiKeyRepository {
     listByProject(projectId: string): Promise<ApiKey[]>;
     revoke(id: string, projectId: string): Promise<boolean>;
     updateLastUsed(id: string): Promise<void>;
+}
+export declare class SupabaseIntegrationRepository implements IIntegrationRepository {
+    private client;
+    constructor(client: SupabaseClient);
+    private mapRow;
+    create(data: Omit<AppIntegration, 'id' | 'createdAt' | 'updatedAt'> & {
+        secret?: string;
+    }): Promise<AppIntegration>;
+    update(id: string, updates: Partial<AppIntegration> & {
+        secret?: string;
+    }): Promise<AppIntegration>;
+    getById(id: string): Promise<AppIntegration | null>;
+    listByProject(projectId: string): Promise<AppIntegration[]>;
+    delete(id: string, projectId: string): Promise<boolean>;
+    getDecryptedSecret(id: string): Promise<string | null>;
 }
 export declare function createSupabaseRepositories(url: string, serviceRoleKey: string): IRepositories;
 //# sourceMappingURL=SupabaseRepository.d.ts.map
