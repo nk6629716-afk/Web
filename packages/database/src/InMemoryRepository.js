@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { SEEDED_SAMPLE_WORKFLOW } from '@relay/shared';
 export class InMemoryWorkflowRepository {
     workflows = new Map();
@@ -161,11 +162,62 @@ export class InMemoryProjectRepository {
         return project;
     }
 }
+export class InMemoryApiKeyRepository {
+    keys = new Map();
+    async create(data) {
+        const randomHex = crypto.randomBytes(24).toString('hex');
+        const plaintextToken = `rl_live_${randomHex}`;
+        const keyPrefix = plaintextToken.substring(0, 16);
+        const secretHash = crypto.createHash('sha256').update(plaintextToken).digest('hex');
+        const id = `key-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const apiKey = {
+            id,
+            projectId: data.projectId,
+            name: data.name,
+            keyPrefix,
+            secretHash,
+            scopes: data.scopes,
+            createdAt: new Date().toISOString(),
+            expiresAt: data.expiresAt
+        };
+        this.keys.set(id, apiKey);
+        return {
+            apiKey: JSON.parse(JSON.stringify(apiKey)),
+            plaintextToken
+        };
+    }
+    async findByKeyPrefix(keyPrefix) {
+        for (const key of this.keys.values()) {
+            if (key.keyPrefix === keyPrefix && !key.revokedAt) {
+                return JSON.parse(JSON.stringify(key));
+            }
+        }
+        return null;
+    }
+    async listByProject(projectId) {
+        const list = Array.from(this.keys.values()).filter(k => k.projectId === projectId && !k.revokedAt);
+        return JSON.parse(JSON.stringify(list));
+    }
+    async revoke(id, projectId) {
+        const key = this.keys.get(id);
+        if (!key || key.projectId !== projectId)
+            return false;
+        key.revokedAt = new Date().toISOString();
+        return true;
+    }
+    async updateLastUsed(id) {
+        const key = this.keys.get(id);
+        if (key) {
+            key.lastUsedAt = new Date().toISOString();
+        }
+    }
+}
 export function createInMemoryRepositories() {
     return {
         workflows: new InMemoryWorkflowRepository(),
         executions: new InMemoryExecutionRepository(),
-        projects: new InMemoryProjectRepository()
+        projects: new InMemoryProjectRepository(),
+        apiKeys: new InMemoryApiKeyRepository()
     };
 }
 //# sourceMappingURL=InMemoryRepository.js.map

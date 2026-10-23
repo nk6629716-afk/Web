@@ -1,5 +1,5 @@
-import { Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
-import { IExecutionRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
+import { ApiKey, ApiKeyScope, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
+import { IApiKeyRepository, IExecutionRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
 export declare class InMemoryWorkflowRepository implements IWorkflowRepository {
     private workflows;
     private versions;
@@ -32,6 +32,22 @@ export declare class InMemoryProjectRepository implements IProjectRepository {
         name: string;
         ownerId?: string;
     }): Promise<Project>;
+}
+export declare class InMemoryApiKeyRepository implements IApiKeyRepository {
+    private keys;
+    create(data: {
+        name: string;
+        projectId: string;
+        scopes: ApiKeyScope[];
+        expiresAt?: string;
+    }): Promise<{
+        apiKey: ApiKey;
+        plaintextToken: string;
+    }>;
+    findByKeyPrefix(keyPrefix: string): Promise<ApiKey | null>;
+    listByProject(projectId: string): Promise<ApiKey[]>;
+    revoke(id: string, projectId: string): Promise<boolean>;
+    updateLastUsed(id: string): Promise<void>;
 }
 export declare function createInMemoryRepositories(): IRepositories;
 //# sourceMappingURL=InMemoryRepository.d.ts.map

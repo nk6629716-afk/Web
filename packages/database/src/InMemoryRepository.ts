@@ -1,4 +1,7 @@
+import crypto from 'crypto';
 import { 
+  ApiKey,
+  ApiKeyScope,
   Execution, 
   ExecutionStep, 
   Project, 
@@ -7,12 +10,14 @@ import {
   SEEDED_SAMPLE_WORKFLOW 
 } from '@relay/shared';
 import { 
+  IApiKeyRepository,
   IExecutionRepository, 
   IProjectRepository, 
   IRepositories, 
   IWorkflowRepository, 
   SaveWorkflowResult 
 } from './interfaces';
+
 
 export class InMemoryWorkflowRepository implements IWorkflowRepository {
   private workflows = new Map<string, Workflow>();
@@ -197,10 +202,69 @@ export class InMemoryProjectRepository implements IProjectRepository {
   }
 }
 
+export class InMemoryApiKeyRepository implements IApiKeyRepository {
+  private keys = new Map<string, ApiKey>();
+
+  async create(data: { name: string; projectId: string; scopes: ApiKeyScope[]; expiresAt?: string }): Promise<{ apiKey: ApiKey; plaintextToken: string }> {
+    const randomHex = crypto.randomBytes(24).toString('hex');
+    const plaintextToken = `rl_live_${randomHex}`;
+    const keyPrefix = plaintextToken.substring(0, 16);
+    const secretHash = crypto.createHash('sha256').update(plaintextToken).digest('hex');
+
+    const id = `key-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const apiKey: ApiKey = {
+      id,
+      projectId: data.projectId,
+      name: data.name,
+      keyPrefix,
+      secretHash,
+      scopes: data.scopes,
+      createdAt: new Date().toISOString(),
+      expiresAt: data.expiresAt
+    };
+
+    this.keys.set(id, apiKey);
+    return {
+      apiKey: JSON.parse(JSON.stringify(apiKey)),
+      plaintextToken
+    };
+  }
+
+  async findByKeyPrefix(keyPrefix: string): Promise<ApiKey | null> {
+    for (const key of this.keys.values()) {
+      if (key.keyPrefix === keyPrefix && !key.revokedAt) {
+        return JSON.parse(JSON.stringify(key));
+      }
+    }
+    return null;
+  }
+
+  async listByProject(projectId: string): Promise<ApiKey[]> {
+    const list = Array.from(this.keys.values()).filter(k => k.projectId === projectId && !k.revokedAt);
+    return JSON.parse(JSON.stringify(list));
+  }
+
+  async revoke(id: string, projectId: string): Promise<boolean> {
+    const key = this.keys.get(id);
+    if (!key || key.projectId !== projectId) return false;
+    key.revokedAt = new Date().toISOString();
+    return true;
+  }
+
+  async updateLastUsed(id: string): Promise<void> {
+    const key = this.keys.get(id);
+    if (key) {
+      key.lastUsedAt = new Date().toISOString();
+    }
+  }
+}
+
 export function createInMemoryRepositories(): IRepositories {
   return {
     workflows: new InMemoryWorkflowRepository(),
     executions: new InMemoryExecutionRepository(),
-    projects: new InMemoryProjectRepository()
+    projects: new InMemoryProjectRepository(),
+    apiKeys: new InMemoryApiKeyRepository()
   };
 }
+

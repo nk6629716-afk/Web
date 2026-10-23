@@ -1,4 +1,4 @@
-import { Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
+import { ApiKey, ApiKeyScope, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
 export interface SaveWorkflowResult {
     success: boolean;
     workflow: Workflow;
@@ -30,9 +30,25 @@ export interface IProjectRepository {
         ownerId?: string;
     }): Promise<Project>;
 }
+export interface IApiKeyRepository {
+    create(data: {
+        name: string;
+        projectId: string;
+        scopes: ApiKeyScope[];
+        expiresAt?: string;
+    }): Promise<{
+        apiKey: ApiKey;
+        plaintextToken: string;
+    }>;
+    findByKeyPrefix(keyPrefix: string): Promise<ApiKey | null>;
+    listByProject(projectId: string): Promise<ApiKey[]>;
+    revoke(id: string, projectId: string): Promise<boolean>;
+    updateLastUsed(id: string): Promise<void>;
+}
 export interface IRepositories {
     workflows: IWorkflowRepository;
     executions: IExecutionRepository;
     projects: IProjectRepository;
+    apiKeys: IApiKeyRepository;
 }
 //# sourceMappingURL=interfaces.d.ts.map

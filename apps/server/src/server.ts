@@ -3,8 +3,17 @@ import cors from 'cors';
 import { getRepositories } from '@relay/database';
 import { runWorkflow, validateGraphForExecution } from '@relay/engine';
 import { SEEDED_SAMPLE_WORKFLOW } from '@relay/shared';
+import { 
+  createApiKeyRouter, 
+  requestContextMiddleware, 
+  sendApiError, 
+  ApiError 
+} from './integrations';
 
-export function createServer(repos = getRepositories()) {
+export function createServer(
+  repos = getRepositories(), 
+  options?: { configure?: (app: express.Express, v1Router: express.Router) => void }
+) {
   const app = express();
 
   const allowedOrigin = process.env.FRONTEND_URL || '*';
@@ -13,6 +22,18 @@ export function createServer(repos = getRepositories()) {
     credentials: true
   }));
   app.use(express.json());
+
+  // Mount public API v1 middleware & routes
+  const v1Router = express.Router();
+  v1Router.use(requestContextMiddleware());
+  v1Router.use('/api-keys', createApiKeyRouter(repos));
+
+  if (options?.configure) {
+    options.configure(app, v1Router);
+  }
+
+  app.use('/api/v1', v1Router);
+
 
   // GET /api/health
   app.get('/api/health', (req: Request, res: Response) => {
@@ -303,6 +324,11 @@ export function createServer(repos = getRepositories()) {
 
   // Global Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    // If error originates from public /api/v1 endpoint, format with uniform envelope
+    if (req.path.startsWith('/api/v1') || err instanceof ApiError) {
+      return sendApiError(res, err, req.requestId);
+    }
+
     console.error('API Error:', err);
     const msg = err.message || '';
     if (msg.includes('schema cache') || msg.includes('Database schema not initialized') || msg.includes('does not exist')) {

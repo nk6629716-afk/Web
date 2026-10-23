@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 export function formatSupabaseError(error, operation) {
     const msg = error?.message || (typeof error === 'string' ? error : 'Unknown database error');
@@ -338,12 +339,115 @@ export class SupabaseProjectRepository {
         };
     }
 }
+export class SupabaseApiKeyRepository {
+    client;
+    constructor(client) {
+        this.client = client;
+    }
+    async create(data) {
+        const randomHex = crypto.randomBytes(24).toString('hex');
+        const plaintextToken = `rl_live_${randomHex}`;
+        const keyPrefix = plaintextToken.substring(0, 16);
+        const secretHash = crypto.createHash('sha256').update(plaintextToken).digest('hex');
+        const { data: inserted, error } = await this.client
+            .from('integration_api_keys')
+            .insert({
+            name: data.name,
+            project_id: data.projectId,
+            key_prefix: keyPrefix,
+            secret_hash: secretHash,
+            scopes: data.scopes,
+            expires_at: data.expiresAt || null
+        })
+            .select('*')
+            .single();
+        if (error) {
+            throw formatSupabaseError(error, 'create API key');
+        }
+        const apiKey = {
+            id: inserted.id,
+            projectId: inserted.project_id,
+            name: inserted.name,
+            keyPrefix: inserted.key_prefix,
+            secretHash: inserted.secret_hash,
+            scopes: inserted.scopes,
+            createdAt: inserted.created_at,
+            lastUsedAt: inserted.last_used_at,
+            expiresAt: inserted.expires_at,
+            revokedAt: inserted.revoked_at
+        };
+        return { apiKey, plaintextToken };
+    }
+    async findByKeyPrefix(keyPrefix) {
+        const { data, error } = await this.client
+            .from('integration_api_keys')
+            .select('*')
+            .eq('key_prefix', keyPrefix)
+            .is('revoked_at', null)
+            .single();
+        if (error || !data)
+            return null;
+        return {
+            id: data.id,
+            projectId: data.project_id,
+            name: data.name,
+            keyPrefix: data.key_prefix,
+            secretHash: data.secret_hash,
+            scopes: data.scopes,
+            createdAt: data.created_at,
+            lastUsedAt: data.last_used_at,
+            expiresAt: data.expires_at,
+            revokedAt: data.revoked_at
+        };
+    }
+    async listByProject(projectId) {
+        const { data, error } = await this.client
+            .from('integration_api_keys')
+            .select('*')
+            .eq('project_id', projectId)
+            .is('revoked_at', null)
+            .order('created_at', { ascending: false });
+        if (error || !data)
+            return [];
+        return data.map((d) => ({
+            id: d.id,
+            projectId: d.project_id,
+            name: d.name,
+            keyPrefix: d.key_prefix,
+            secretHash: d.secret_hash,
+            scopes: d.scopes,
+            createdAt: d.created_at,
+            lastUsedAt: d.last_used_at,
+            expiresAt: d.expires_at,
+            revokedAt: d.revoked_at
+        }));
+    }
+    async revoke(id, projectId) {
+        const { data, error } = await this.client
+            .from('integration_api_keys')
+            .update({ revoked_at: new Date().toISOString() })
+            .eq('id', id)
+            .eq('project_id', projectId)
+            .select('id')
+            .single();
+        if (error || !data)
+            return false;
+        return true;
+    }
+    async updateLastUsed(id) {
+        await this.client
+            .from('integration_api_keys')
+            .update({ last_used_at: new Date().toISOString() })
+            .eq('id', id);
+    }
+}
 export function createSupabaseRepositories(url, serviceRoleKey) {
     const client = createClient(url, serviceRoleKey);
     return {
         workflows: new SupabaseWorkflowRepository(client),
         executions: new SupabaseExecutionRepository(client),
-        projects: new SupabaseProjectRepository(client)
+        projects: new SupabaseProjectRepository(client),
+        apiKeys: new SupabaseApiKeyRepository(client)
     };
 }
 //# sourceMappingURL=SupabaseRepository.js.map

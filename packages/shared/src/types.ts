@@ -181,3 +181,37 @@ export interface Collaborator {
   activeNodeId?: string | null;
   selectedNodeId?: string;
 }
+
+export type ApiKeyScope = 
+  | 'workflows:read'
+  | 'workflows:execute'
+  | 'executions:read'
+  | 'webhooks:manage';
+
+export interface ApiKey {
+  id: string;
+  projectId: string;
+  name: string;
+  keyPrefix: string;
+  secretHash: string;
+  scopes: ApiKeyScope[];
+  createdAt: string;
+  lastUsedAt?: string;
+  expiresAt?: string;
+  revokedAt?: string;
+}
+
+export interface ApiKeyCreatedResponse {
+  apiKey: Omit<ApiKey, 'secretHash'>;
+  plaintextToken: string;
+}
+
+export interface ApiErrorEnvelope {
+  error: {
+    code: string;
+    message: string;
+    requestId?: string;
+    details?: any;
+  };
+}
+
