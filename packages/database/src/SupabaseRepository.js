@@ -20,29 +20,52 @@ export class SupabaseWorkflowRepository {
         this.client = client;
     }
     async getById(id) {
-        const { data, error } = await this.client
+        if (!id)
+            return null;
+        if (isUuid(id)) {
+            const { data, error } = await this.client
+                .from('workflows')
+                .select('*')
+                .eq('id', id)
+                .single();
+            if (error) {
+                if (error.code === 'PGRST116')
+                    return null; // 0 rows returned
+                if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+                    throw formatSupabaseError(error, `retrieve workflow ${id}`);
+                }
+                return null;
+            }
+            if (!data)
+                return null;
+            return {
+                id: data.id,
+                projectId: data.project_id,
+                name: data.name,
+                graph: data.graph_json,
+                revision: data.revision,
+                updatedAt: data.updated_at
+            };
+        }
+        // If ID is not a UUID (e.g. demo-workflow-001 or wf_demo_onboarding),
+        // retrieve the most recently updated workflow from Supabase
+        const { data: latestRows, error: listErr } = await this.client
             .from('workflows')
             .select('*')
-            .eq('id', id)
-            .single();
-        if (error) {
-            if (error.code === 'PGRST116')
-                return null; // 0 rows returned
-            if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-                throw formatSupabaseError(error, `retrieve workflow ${id}`);
-            }
-            return null;
+            .order('updated_at', { ascending: false })
+            .limit(1);
+        if (!listErr && latestRows && latestRows.length > 0) {
+            const row = latestRows[0];
+            return {
+                id: row.id,
+                projectId: row.project_id,
+                name: row.name,
+                graph: row.graph_json,
+                revision: row.revision,
+                updatedAt: row.updated_at
+            };
         }
-        if (!data)
-            return null;
-        return {
-            id: data.id,
-            projectId: data.project_id,
-            name: data.name,
-            graph: data.graph_json,
-            revision: data.revision,
-            updatedAt: data.updated_at
-        };
+        return null;
     }
     async resolveProjectId(projectId) {
         if (projectId && isUuid(projectId)) {
@@ -155,6 +178,24 @@ export class SupabaseWorkflowRepository {
             graph: d.graph_json,
             createdBy: d.created_by,
             createdAt: d.created_at
+        }));
+    }
+    async listByProject(projectId) {
+        const targetProjectId = await this.resolveProjectId(projectId);
+        const { data, error } = await this.client
+            .from('workflows')
+            .select('*')
+            .eq('project_id', targetProjectId)
+            .order('updated_at', { ascending: false });
+        if (error || !data)
+            return [];
+        return data.map((d) => ({
+            id: d.id,
+            projectId: d.project_id,
+            name: d.name,
+            graph: d.graph_json,
+            revision: d.revision,
+            updatedAt: d.updated_at
         }));
     }
 }

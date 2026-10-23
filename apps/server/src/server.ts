@@ -126,6 +126,17 @@ export function createServer(
     }
   });
 
+  // GET /api/workflows (list workflows for a project)
+  app.get('/api/workflows', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = (req.query.projectId as string) || (req as any).projectId || 'demo-project-001';
+      const workflows = await repos.workflows.listByProject(projectId);
+      res.json({ workflows });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /api/workflows/:id
   app.get('/api/workflows/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -135,7 +146,7 @@ export function createServer(
       try {
         workflow = await repos.workflows.getById(id);
       } catch (err: any) {
-        if (id === SEEDED_SAMPLE_WORKFLOW.id) {
+        if (id === SEEDED_SAMPLE_WORKFLOW.id || id === 'wf_demo_onboarding') {
           console.warn('Database unavailable when reading demo workflow; serving in-memory seeded workflow:', err.message);
           res.setHeader('x-relay-db-status', 'migration-required');
           return res.json({ 
@@ -146,12 +157,18 @@ export function createServer(
         throw err;
       }
 
-      // If demo workflow requested and not in store, attempt to seed, but fall back to memory
-      if (!workflow && id === SEEDED_SAMPLE_WORKFLOW.id) {
+      // If workflow not found and a demo/default id was requested,
+      // load the latest project workflow or seed once
+      if (!workflow && (id === SEEDED_SAMPLE_WORKFLOW.id || id === 'wf_demo_onboarding')) {
         try {
-          workflow = await repos.workflows.create(SEEDED_SAMPLE_WORKFLOW);
+          const existingList = await repos.workflows.listByProject('demo-project-001');
+          if (existingList.length > 0) {
+            workflow = existingList[0];
+          } else {
+            workflow = await repos.workflows.create(SEEDED_SAMPLE_WORKFLOW);
+          }
         } catch (seedErr) {
-          console.warn('Could not persist seeded workflow into database:', seedErr);
+          console.warn('Could not retrieve or persist seeded workflow into database:', seedErr);
           workflow = SEEDED_SAMPLE_WORKFLOW;
         }
       }

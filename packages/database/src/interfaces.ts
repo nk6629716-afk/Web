@@ -11,6 +11,7 @@ export interface IWorkflowRepository {
   create(workflow: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
   save(workflow: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
   listVersions(workflowId: string): Promise<WorkflowVersion[]>;
+  listByProject(projectId: string): Promise<Workflow[]>;
 }
 
 export interface IExecutionRepository {

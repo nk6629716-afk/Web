@@ -11,6 +11,7 @@ export declare class SupabaseWorkflowRepository implements IWorkflowRepository {
     create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
     save(incoming: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
     listVersions(workflowId: string): Promise<WorkflowVersion[]>;
+    listByProject(projectId: string): Promise<Workflow[]>;
 }
 export declare class SupabaseExecutionRepository implements IExecutionRepository {
     private client;

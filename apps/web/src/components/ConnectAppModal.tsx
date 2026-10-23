@@ -142,6 +142,8 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
       e.preventDefault();
     }
 
+    if (isSaving) return;
+
     if (!name.trim()) {
       setFormError('Integration Name is required.');
       formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -169,8 +171,21 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
     setIsSuccess(false);
 
     try {
+      // Ensure targetProjectId is a valid UUID or resolved from project list
+      let targetProjectId = projectId;
+      if (!targetProjectId || targetProjectId === 'demo-project-001' || !targetProjectId.includes('-')) {
+        try {
+          const projs = await api.getProjects();
+          if (projs && projs.length > 0) {
+            targetProjectId = projs[0].id;
+          }
+        } catch {
+          // Keep existing
+        }
+      }
+
       const integration = await api.createIntegration({
-        projectId,
+        projectId: targetProjectId,
         name: name.trim(),
         appType,
         baseUrl: baseUrl.trim(),
@@ -499,8 +514,7 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
               Cancel
             </NeumoButton>
             <NeumoButton
-              form="connect-app-form"
-              type="submit"
+              type="button"
               onClick={handleSave}
               disabled={isSaving}
               variant={isSuccess ? 'success' : 'primary'}

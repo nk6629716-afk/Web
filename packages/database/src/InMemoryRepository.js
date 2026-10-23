@@ -25,6 +25,7 @@ export class InMemoryWorkflowRepository {
     async create(data) {
         const newWorkflow = {
             ...data,
+            id: data.id || `wf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             revision: 1,
             updatedAt: new Date().toISOString()
         };
@@ -80,6 +81,15 @@ export class InMemoryWorkflowRepository {
     async listVersions(workflowId) {
         const list = this.versions.get(workflowId) || [];
         return JSON.parse(JSON.stringify(list));
+    }
+    async listByProject(projectId) {
+        const list = [];
+        for (const wf of this.workflows.values()) {
+            if (!projectId || wf.projectId === projectId || projectId === 'demo-project-001') {
+                list.push(JSON.parse(JSON.stringify(wf)));
+            }
+        }
+        return list;
     }
 }
 export class InMemoryExecutionRepository {

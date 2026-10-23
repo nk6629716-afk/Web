@@ -8,6 +8,7 @@ export declare class InMemoryWorkflowRepository implements IWorkflowRepository {
     create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
     save(incoming: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
     listVersions(workflowId: string): Promise<WorkflowVersion[]>;
+    listByProject(projectId: string): Promise<Workflow[]>;
 }
 export declare class InMemoryExecutionRepository implements IExecutionRepository {
     private executions;

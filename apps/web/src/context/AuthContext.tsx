@@ -21,6 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
+    let isInitialized = false;
 
     async function initAuth() {
       if (!isSupabaseConfigured) {
@@ -37,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.error('Failed to initialize session:', err);
       } finally {
+        isInitialized = true;
         if (isMounted) setLoading(false);
       }
     }
@@ -47,7 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isMounted) {
         setSession(newSession);
         setUser(newUser);
-        setLoading(false);
+        if (isInitialized) {
+          setLoading(false);
+        }
       }
     });
 

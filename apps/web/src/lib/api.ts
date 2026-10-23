@@ -129,6 +129,12 @@ export const api = {
   },
 
   // Workflows
+  async getWorkflows(projectId?: string): Promise<Workflow[]> {
+    const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+    const res = await request<{ workflows: Workflow[] }>(`/api/workflows${query}`);
+    return res.workflows || [];
+  },
+
   async getWorkflow(id: string): Promise<{ workflow: Workflow; _databaseNotice?: string }> {
     return request<{ workflow: Workflow; _databaseNotice?: string }>(`/api/workflows/${id}`);
   },

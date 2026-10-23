@@ -228,4 +228,56 @@ describe('Regression Tests: Production Bug Fixes (CORS, Cyclic Graph, Integratio
       expect(data.message).toMatch(/Integration name is required/i);
     });
   });
+
+  describe('Bug 4: Workflow Persistence After Reload & Project Workflows List', () => {
+    it('supports GET /api/workflows to list workflows for project', async () => {
+      const res = await fetch(`${baseUrl}/api/workflows?projectId=demo-project-001`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(Array.isArray(data.workflows)).toBe(true);
+      expect(data.workflows.length).toBeGreaterThan(0);
+    });
+
+    it('re-hydrates existing workflow on reload when requested with demo ID', async () => {
+      // 1. Create/save workflow
+      const createRes = await fetch(`${baseUrl}/api/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Persisted Workflow on Reload',
+          graph: {
+            nodes: [{ id: 'n1', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'Start' } }],
+            edges: []
+          }
+        })
+      });
+      expect(createRes.status).toBe(201);
+      const { workflow: created } = await createRes.json();
+
+      // 2. Update/save revision 1 -> 2
+      const saveRes = await fetch(`${baseUrl}/api/workflows/${created.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedRevision: 1,
+          name: 'Persisted Workflow on Reload (Rev 2)',
+          graph: {
+            nodes: [{ id: 'n1', type: 'trigger', position: { x: 50, y: 50 }, data: { label: 'Start' } }],
+            edges: []
+          }
+        })
+      });
+      expect(saveRes.status).toBe(200);
+      const { workflow: saved } = await saveRes.json();
+      expect(saved.revision).toBe(2);
+
+      // 3. Simulating page reload: GET by saved ID returns updated revision 2
+      const reloadRes = await fetch(`${baseUrl}/api/workflows/${saved.id}`);
+      expect(reloadRes.status).toBe(200);
+      const { workflow: reloaded } = await reloadRes.json();
+      expect(reloaded.id).toBe(saved.id);
+      expect(reloaded.name).toBe('Persisted Workflow on Reload (Rev 2)');
+      expect(reloaded.revision).toBe(2);
+    });
+  });
 });

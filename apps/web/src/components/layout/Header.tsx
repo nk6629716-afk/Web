@@ -40,6 +40,7 @@ interface HeaderProps {
   onViewChange?: (view: AppView) => void;
   projectName?: string;
   onCreateProjectClick?: () => void;
+  onCreateWorkflowClick?: () => void;
   userEmail?: string | null;
   onLogout?: () => void;
 }
@@ -62,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   onViewChange,
   projectName = 'Default Workspace',
   onCreateProjectClick,
+  onCreateWorkflowClick,
   userEmail,
   onLogout,
 }) => {
@@ -132,6 +134,19 @@ export const Header: React.FC<HeaderProps> = ({
             className="text-xs font-semibold"
           >
             + New Project
+          </NeumoButton>
+        )}
+
+        {/* Studio "+ New Workflow" Button */}
+        {currentView === 'studio' && onCreateWorkflowClick && (
+          <NeumoButton
+            onClick={onCreateWorkflowClick}
+            size="sm"
+            icon={<Zap className="w-3.5 h-3.5 text-[#00ff88]" />}
+            title="Create a new workflow in active project"
+            className="text-xs font-semibold"
+          >
+            + New Workflow
           </NeumoButton>
         )}
 
@@ -218,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
         {onSave && (
           <NeumoButton
             onClick={onSave}
-            disabled={isSaving || (!isDirty && saveStatus !== 'failed')}
+            disabled={isSaving}
             size="sm"
             variant={isDirty ? 'primary' : 'default'}
             className={`font-semibold tracking-wide transition-all ${

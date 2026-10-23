@@ -48,6 +48,7 @@ export class InMemoryWorkflowRepository implements IWorkflowRepository {
   async create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow> {
     const newWorkflow: Workflow = {
       ...data,
+      id: data.id || `wf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       revision: 1,
       updatedAt: new Date().toISOString()
     };
@@ -110,6 +111,16 @@ export class InMemoryWorkflowRepository implements IWorkflowRepository {
   async listVersions(workflowId: string): Promise<WorkflowVersion[]> {
     const list = this.versions.get(workflowId) || [];
     return JSON.parse(JSON.stringify(list));
+  }
+
+  async listByProject(projectId: string): Promise<Workflow[]> {
+    const list: Workflow[] = [];
+    for (const wf of this.workflows.values()) {
+      if (!projectId || wf.projectId === projectId || projectId === 'demo-project-001') {
+        list.push(JSON.parse(JSON.stringify(wf)));
+      }
+    }
+    return list;
   }
 }
 

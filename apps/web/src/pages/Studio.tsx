@@ -136,13 +136,40 @@ export const Studio: React.FC<StudioProps> = ({
     }, 5000);
   };
 
+  // Determine initial workflow ID from URL query param or localStorage
+  const getInitialWorkflowId = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromUrl = urlParams.get('workflowId');
+      if (fromUrl) return fromUrl;
+      const fromStorage = localStorage.getItem('relay:active_workflow_id');
+      if (fromStorage) return fromStorage;
+    }
+    return workflow.id;
+  }, [workflow.id]);
+
   // Load workflow from backend on mount or when switching active workflow
-  const loadWorkflow = useCallback(async (targetId: string = workflow.id) => {
+  const loadWorkflow = useCallback(async (targetId?: string) => {
     setIsLoadingWorkflow(true);
+    const resolvedId = targetId || getInitialWorkflowId();
     try {
-      const res = await api.getWorkflow(targetId);
-      if (res && res.workflow) {
-        const wf = res.workflow;
+      let wf: Workflow | null = null;
+      try {
+        const res = await api.getWorkflow(resolvedId);
+        if (res && res.workflow) {
+          wf = res.workflow;
+        }
+      } catch (getErr) {
+        // If not found or demo ID, try loading project workflows from backend
+        try {
+          const list = await api.getWorkflows(activeProjectId);
+          if (list && list.length > 0) {
+            wf = list[0];
+          }
+        } catch {}
+      }
+
+      if (wf) {
         setWorkflow(wf);
         setWorkflowTitle(wf.name);
         setRevision(wf.revision);
@@ -172,17 +199,80 @@ export const Studio: React.FC<StudioProps> = ({
         setIsDirty(false);
         setSaveStatus('idle');
         setConflictWorkflow(null);
+
+        // Persist active workflow ID to localStorage and synchronize URL query param
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('relay:active_workflow_id', wf.id);
+          const currentUrl = new URL(window.location.href);
+          if (currentUrl.searchParams.get('workflowId') !== wf.id) {
+            currentUrl.searchParams.set('workflowId', wf.id);
+            window.history.replaceState(null, '', currentUrl.toString());
+          }
+        }
       }
     } catch (err: any) {
       console.warn('Backend unavailable on initial load, using default demo workflow:', err?.message);
     } finally {
       setIsLoadingWorkflow(false);
     }
-  }, [workflow.id, setNodes, setEdges]);
+  }, [activeProjectId, getInitialWorkflowId, setNodes, setEdges]);
 
   useEffect(() => {
-    loadWorkflow(workflow.id);
+    loadWorkflow();
   }, []);
+
+  // Create new workflow action
+  const handleCreateWorkflow = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const created = await api.createWorkflow({
+        name: `Workflow ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        projectId: activeProjectId,
+        graph: {
+          nodes: [
+            {
+              id: 'node-trigger-1',
+              type: 'trigger',
+              position: { x: 120, y: 220 },
+              data: { label: 'Start Trigger', nodeType: 'trigger', config: {} }
+            }
+          ],
+          edges: []
+        }
+      });
+
+      if (created) {
+        setWorkflow(created);
+        setWorkflowTitle(created.name);
+        setRevision(created.revision);
+        setNodes(
+          (created.graph?.nodes || []).map((n) => ({
+            id: n.id,
+            type: n.type,
+            position: n.position,
+            data: n.data,
+          }))
+        );
+        setEdges([]);
+        setIsDirty(false);
+        setSaveStatus('idle');
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('relay:active_workflow_id', created.id);
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('workflowId', created.id);
+          window.history.replaceState(null, '', currentUrl.toString());
+        }
+
+        showToast('success', `Created new workflow "${created.name}"!`);
+      }
+    } catch (err: any) {
+      showToast('error', `Failed to create workflow: ${err.message || 'Server error'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeProjectId, isSaving, setNodes, setEdges]);
 
   // Save workflow action with optimistic locking & revision verification
   const handleSaveWorkflow = useCallback(
@@ -212,13 +302,23 @@ export const Studio: React.FC<StudioProps> = ({
         );
 
         if (res && res.workflow) {
-          setWorkflow(res.workflow);
-          setRevision(res.workflow.revision);
-          setWorkflowTitle(res.workflow.name);
+          const savedWf = res.workflow;
+          setWorkflow(savedWf);
+          setRevision(savedWf.revision);
+          setWorkflowTitle(savedWf.name);
           setIsDirty(false);
           setSaveStatus('saved');
           setConflictWorkflow(null);
-          showToast('success', `Workflow "${res.workflow.name}" saved (rev #${res.workflow.revision})!`);
+
+          // Persist active workflow ID to localStorage and synchronize URL query param
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('relay:active_workflow_id', savedWf.id);
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('workflowId', savedWf.id);
+            window.history.replaceState(null, '', currentUrl.toString());
+          }
+
+          showToast('success', `Workflow "${savedWf.name}" saved (rev #${savedWf.revision})!`);
           setTimeout(() => {
             setSaveStatus((curr) => (curr === 'saved' ? 'idle' : curr));
           }, 3000);
@@ -663,6 +763,7 @@ export const Studio: React.FC<StudioProps> = ({
         onViewChange={onViewChange}
         projectName={activeProjectName}
         onCreateProjectClick={onCreateProjectClick}
+        onCreateWorkflowClick={handleCreateWorkflow}
         userEmail={userEmail}
         onLogout={onLogout}
       />

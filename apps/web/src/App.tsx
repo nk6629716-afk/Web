@@ -11,7 +11,12 @@ import { api } from './lib/api';
 
 const RelayDashboard: React.FC = () => {
   const { user, session, loading, signOut, isConfigured } = useAuth();
-  const [demoBypass, setDemoBypass] = useState(false);
+  const [demoBypass, setDemoBypass] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('relay:demo_bypass') === 'true';
+    }
+    return false;
+  });
 
   const [currentView, setCurrentView] = useState<AppView>('studio');
   const [activeProjectId, setActiveProjectId] = useState<string>('demo-project-001');
@@ -39,6 +44,13 @@ const RelayDashboard: React.FC = () => {
     setCurrentView('studio');
   };
 
+  const handleBypassDemo = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('relay:demo_bypass', 'true');
+    }
+    setDemoBypass(true);
+  };
+
   // 1. Initializing auth session check
   if (loading) {
     return (
@@ -58,13 +70,16 @@ const RelayDashboard: React.FC = () => {
   // 2. Unauthenticated: show Login/Signup flow
   const isAuthenticated = Boolean(session && user);
   if (!isAuthenticated && !demoBypass) {
-    return <AuthPage onBypassDemo={() => setDemoBypass(true)} />;
+    return <AuthPage onBypassDemo={handleBypassDemo} />;
   }
 
   // 3. Authenticated: redirect to existing Relay dashboard with full Phase C features
   const displayUserEmail = user?.email || (demoBypass ? 'developer (offline demo)' : null);
 
   const handleLogout = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('relay:demo_bypass');
+    }
     setDemoBypass(false);
     await signOut();
   };
