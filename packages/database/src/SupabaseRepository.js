@@ -1,6 +1,11 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeWorkflowGraph } from '@relay/shared';
 import { encryptCredential, decryptCredential } from './InMemoryRepository';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function isUuid(id) {
+    return typeof id === 'string' && UUID_REGEX.test(id);
+}
 export function formatSupabaseError(error, operation) {
     const msg = error?.message || (typeof error === 'string' ? error : 'Unknown database error');
     if (msg.includes('Could not find the table') || msg.includes('schema cache') || msg.includes('does not exist')) {
@@ -39,16 +44,36 @@ export class SupabaseWorkflowRepository {
             updatedAt: data.updated_at
         };
     }
+    async resolveProjectId(projectId) {
+        if (projectId && isUuid(projectId)) {
+            return projectId;
+        }
+        const { data: projs } = await this.client.from('projects').select('id').limit(1);
+        if (projs && projs.length > 0) {
+            return projs[0].id;
+        }
+        const { data: newProj } = await this.client
+            .from('projects')
+            .insert({ name: 'Default Workspace' })
+            .select('id')
+            .single();
+        return newProj ? newProj.id : '00000000-0000-0000-0000-000000000001';
+    }
     async create(data) {
+        const targetProjectId = await this.resolveProjectId(data.projectId);
+        const cleanGraph = sanitizeWorkflowGraph(data.graph);
+        const insertPayload = {
+            project_id: targetProjectId,
+            name: data.name,
+            graph_json: cleanGraph,
+            revision: 1
+        };
+        if (data.id && isUuid(data.id)) {
+            insertPayload.id = data.id;
+        }
         const { data: inserted, error } = await this.client
             .from('workflows')
-            .insert({
-            id: data.id,
-            project_id: data.projectId,
-            name: data.name,
-            graph_json: data.graph,
-            revision: 1
-        })
+            .insert(insertPayload)
             .select('*')
             .single();
         if (error) {
@@ -70,12 +95,13 @@ export class SupabaseWorkflowRepository {
         };
     }
     async save(incoming, expectedRevision) {
+        const cleanGraph = sanitizeWorkflowGraph(incoming.graph);
         // Optimistic lock update using revision check
         const { data: updated, error } = await this.client
             .from('workflows')
             .update({
             name: incoming.name,
-            graph_json: incoming.graph,
+            graph_json: cleanGraph,
             revision: expectedRevision + 1,
             updated_at: new Date().toISOString()
         })
@@ -87,7 +113,7 @@ export class SupabaseWorkflowRepository {
             // Conflict or record not found
             const current = await this.getById(incoming.id);
             if (!current) {
-                const created = await this.create(incoming);
+                const created = await this.create({ ...incoming, graph: cleanGraph });
                 return { success: true, workflow: created };
             }
             return {
@@ -470,12 +496,28 @@ export class SupabaseIntegrationRepository {
             updatedAt: row.updated_at
         };
     }
+    async resolveProjectId(projectId) {
+        if (projectId && isUuid(projectId)) {
+            return projectId;
+        }
+        const { data: projs } = await this.client.from('projects').select('id').limit(1);
+        if (projs && projs.length > 0) {
+            return projs[0].id;
+        }
+        const { data: newProj } = await this.client
+            .from('projects')
+            .insert({ name: 'Default Workspace' })
+            .select('id')
+            .single();
+        return newProj ? newProj.id : '00000000-0000-0000-0000-000000000001';
+    }
     async create(data) {
         const encryptedAuth = data.secret ? encryptCredential(data.secret) : data.encryptedAuth;
+        const targetProjectId = await this.resolveProjectId(data.projectId);
         const { data: inserted, error } = await this.client
             .from('app_integrations')
             .insert({
-            project_id: data.projectId,
+            project_id: targetProjectId,
             name: data.name,
             app_type: data.appType || 'generic_http',
             base_url: data.baseUrl,
@@ -554,10 +596,11 @@ export class SupabaseIntegrationRepository {
         return this.mapRow(data);
     }
     async listByProject(projectId) {
+        const targetProjectId = await this.resolveProjectId(projectId);
         const { data, error } = await this.client
             .from('app_integrations')
             .select('*')
-            .eq('project_id', projectId)
+            .eq('project_id', targetProjectId)
             .order('created_at', { ascending: false });
         if (error || !data)
             return [];

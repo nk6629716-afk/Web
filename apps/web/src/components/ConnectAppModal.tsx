@@ -38,6 +38,8 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const formRef = React.useRef<HTMLFormElement>(null);
+
   // Form State
   const [appType, setAppType] = useState<'citypulse' | 'generic_http'>('citypulse');
   const [name, setName] = useState('CityPulse Civic Gateway');
@@ -56,6 +58,7 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Preset switch
@@ -63,6 +66,7 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
     setAppType(preset);
     setFormError(null);
     setTestResult(null);
+    setIsSuccess(false);
 
     if (preset === 'citypulse') {
       setName('CityPulse Civic Gateway');
@@ -133,14 +137,19 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
   };
 
   // Save Integration
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
     if (!name.trim()) {
       setFormError('Integration Name is required.');
+      formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
     if (!baseUrl.trim()) {
       setFormError('Base URL is required.');
+      formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -150,12 +159,14 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
         parsedHeaders = JSON.parse(headersJson);
       } catch {
         setFormError('Headers must be valid JSON.');
+        formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
     }
 
     setIsSaving(true);
     setFormError(null);
+    setIsSuccess(false);
 
     try {
       const integration = await api.createIntegration({
@@ -173,10 +184,15 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
         testMethod
       });
 
-      onSuccess(integration);
-      onClose();
+      setIsSuccess(true);
+      setTimeout(() => {
+        onSuccess(integration);
+        onClose();
+      }, 600);
     } catch (err: any) {
+      console.error('Failed to create integration:', err);
       setFormError(err.message || 'Failed to save integration.');
+      formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSaving(false);
     }
@@ -209,7 +225,12 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form 
+          ref={formRef} 
+          id="connect-app-form" 
+          onSubmit={handleSave} 
+          className="flex-1 overflow-y-auto p-6 space-y-6"
+        >
           {/* Preset Selector */}
           <div className="space-y-2">
             <span className="text-[11px] font-mono font-bold uppercase text-slate-300">
@@ -461,29 +482,41 @@ export const ConnectAppModal: React.FC<ConnectAppModalProps> = ({
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-white/[0.05] flex items-center justify-between bg-[#24262b]">
-          <span className="text-[11px] text-slate-400">
-            Available to workflow action nodes upon saving
-          </span>
-          <div className="flex items-center gap-3">
-            <NeumoButton onClick={onClose} size="sm">
+        <div className="px-6 py-4 border-t border-white/[0.05] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#24262b]">
+          {formError ? (
+            <div className="flex items-center gap-2 text-xs text-[#ff5580] max-w-sm truncate" title={formError}>
+              <AlertTriangle className="w-4 h-4 shrink-0 text-[#ff3366]" />
+              <span className="truncate">{formError}</span>
+            </div>
+          ) : (
+            <span className="text-[11px] text-slate-400">
+              Available to workflow action nodes upon saving
+            </span>
+          )}
+
+          <div className="flex items-center gap-3 ml-auto">
+            <NeumoButton type="button" onClick={onClose} size="sm" disabled={isSaving}>
               Cancel
             </NeumoButton>
             <NeumoButton
+              form="connect-app-form"
+              type="submit"
               onClick={handleSave}
               disabled={isSaving}
-              variant="primary"
+              variant={isSuccess ? 'success' : 'primary'}
               size="md"
               icon={
                 isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin text-[#00bfff]" />
+                ) : isSuccess ? (
+                  <CheckCircle2 className="w-4 h-4 text-[#00ff88]" />
                 ) : (
                   <CheckCircle2 className="w-4 h-4 text-[#00bfff]" />
                 )
               }
               className="font-bold tracking-wide"
             >
-              {isSaving ? 'Connecting App...' : 'Save & Connect'}
+              {isSaving ? 'Connecting App...' : isSuccess ? 'Connected!' : 'Save & Connect'}
             </NeumoButton>
           </div>
         </div>

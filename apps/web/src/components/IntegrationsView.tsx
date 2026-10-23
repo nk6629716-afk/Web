@@ -35,14 +35,17 @@ import { ConnectAppModal } from './ConnectAppModal';
 
 interface IntegrationsViewProps {
   currentWorkflowId?: string;
+  activeProjectId?: string;
   onOpenStudio?: () => void;
 }
 
 export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   currentWorkflowId = 'demo-workflow-001',
+  activeProjectId,
   onOpenStudio,
 }) => {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(currentWorkflowId);
+  const [resolvedProjectId, setResolvedProjectId] = useState<string>(activeProjectId || 'demo-project-001');
   const [activeTab, setActiveTab] = useState<'curl' | 'javascript' | 'nodejs' | 'python' | 'civicconnect'>('civicconnect');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -77,10 +80,11 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   const executionEndpoint = `${baseUrl}/api/workflows/${selectedWorkflowId}/execute`;
 
   // Fetch Integrations list
-  const fetchIntegrations = async () => {
+  const fetchIntegrations = async (targetProjectId?: string) => {
     setIsIntegrationsLoading(true);
+    const pid = targetProjectId || resolvedProjectId;
     try {
-      const list = await api.getIntegrations();
+      const list = await api.getIntegrations(pid);
       setIntegrations(list);
     } catch (err) {
       console.error('Failed to load integrations:', err);
@@ -103,8 +107,26 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
 
   useEffect(() => {
     fetchHealth();
-    fetchIntegrations();
-  }, []);
+
+    // Resolve active project ID from API if default is a placeholder
+    const initProject = async () => {
+      try {
+        const projects = await api.getProjects();
+        if (projects && projects.length > 0) {
+          const match = activeProjectId ? projects.find(p => p.id === activeProjectId) : projects[0];
+          const chosenId = match ? match.id : projects[0].id;
+          setResolvedProjectId(chosenId);
+          fetchIntegrations(chosenId);
+          return;
+        }
+      } catch {
+        // Fallback to activeProjectId
+      }
+      fetchIntegrations(resolvedProjectId);
+    };
+
+    initProject();
+  }, [activeProjectId]);
 
   const handleCopy = (key: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -827,9 +849,11 @@ router.post('/api/reports', async (req, res) => {
         {/* Modal */}
         <ConnectAppModal
           isOpen={isConnectModalOpen}
+          projectId={resolvedProjectId}
           onClose={() => setIsConnectModalOpen(false)}
           onSuccess={(newInteg) => {
             setIntegrations((prev) => [newInteg, ...prev]);
+            fetchIntegrations(resolvedProjectId);
           }}
         />
       </div>

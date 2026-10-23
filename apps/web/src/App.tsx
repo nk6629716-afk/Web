@@ -7,6 +7,7 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { StatusLED } from './components/ui/StatusLED';
 import { Loader2 } from 'lucide-react';
 import { Project } from '@relay/shared';
+import { api } from './lib/api';
 
 const RelayDashboard: React.FC = () => {
   const { user, session, loading, signOut, isConfigured } = useAuth();
@@ -16,6 +17,21 @@ const RelayDashboard: React.FC = () => {
   const [activeProjectId, setActiveProjectId] = useState<string>('demo-project-001');
   const [activeProjectName, setActiveProjectName] = useState<string>('Default Workspace');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    const loadDefaultProject = async () => {
+      try {
+        const projects = await api.getProjects();
+        if (projects && projects.length > 0) {
+          setActiveProjectId(projects[0].id);
+          setActiveProjectName(projects[0].name);
+        }
+      } catch {
+        // Fallback to initial
+      }
+    };
+    loadDefaultProject();
+  }, []);
 
   const handleProjectCreated = (newProject: Project) => {
     setActiveProjectId(newProject.id);

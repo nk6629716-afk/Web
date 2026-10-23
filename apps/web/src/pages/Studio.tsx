@@ -16,6 +16,7 @@ import {
   Workflow,
   WorkflowNode,
   AppIntegrationSafeResponse,
+  toWorkflowGraphDTO,
 } from '@relay/shared';
 import { SAMPLE_WORKFLOW } from '../lib/sampleWorkflow';
 import { executeWorkflow, validateGraph } from '../lib/localEngine';
@@ -188,22 +189,7 @@ export const Studio: React.FC<StudioProps> = ({
     async (forcedRevision?: number) => {
       if (isSaving) return;
 
-      const currentGraph = {
-        nodes: nodes.map((n) => ({
-          id: n.id,
-          type: n.type as NodeType,
-          position: n.position,
-          data: n.data as any,
-        })),
-        edges: edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle,
-          label: typeof e.label === 'string' ? e.label : undefined,
-        })),
-      };
+      const currentGraph = toWorkflowGraphDTO(nodes, edges);
 
       // Validate graph before saving
       const validation = validateGraph(currentGraph);
@@ -467,22 +453,7 @@ export const Studio: React.FC<StudioProps> = ({
 
   // Validate graph action
   const handleValidate = useCallback(() => {
-    const currentGraph = {
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type as NodeType,
-        position: n.position,
-        data: n.data as any,
-      })),
-      edges: edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: typeof e.label === 'string' ? e.label : undefined,
-      })),
-    };
+    const currentGraph = toWorkflowGraphDTO(nodes, edges);
 
     const result = validateGraph(currentGraph);
     if (result.isValid) {
@@ -536,22 +507,7 @@ export const Studio: React.FC<StudioProps> = ({
   const handleRun = useCallback(async () => {
     if (isRunning) return;
 
-    const currentGraph = {
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type as NodeType,
-        position: n.position,
-        data: n.data as any,
-      })),
-      edges: edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: typeof e.label === 'string' ? e.label : undefined,
-      })),
-    };
+    const currentGraph = toWorkflowGraphDTO(nodes, edges);
 
     // Reset node states to idle before start
     setNodes((nds) =>
@@ -769,6 +725,7 @@ export const Studio: React.FC<StudioProps> = ({
       {currentView === 'integrations' && (
         <IntegrationsView
           currentWorkflowId={workflow.id}
+          activeProjectId={activeProjectId}
           onOpenStudio={() => onViewChange?.('studio')}
         />
       )}

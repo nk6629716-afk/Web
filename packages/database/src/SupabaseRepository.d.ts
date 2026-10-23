@@ -1,11 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ApiKey, ApiKeyScope, AppIntegration, Execution, ExecutionStep, Project, Workflow, WorkflowVersion } from '@relay/shared';
 import { IApiKeyRepository, IExecutionRepository, IIntegrationRepository, IProjectRepository, IRepositories, IWorkflowRepository, SaveWorkflowResult } from './interfaces';
+export declare function isUuid(id: string): boolean;
 export declare function formatSupabaseError(error: any, operation: string): Error;
 export declare class SupabaseWorkflowRepository implements IWorkflowRepository {
     private client;
     constructor(client: SupabaseClient);
     getById(id: string): Promise<Workflow | null>;
+    private resolveProjectId;
     create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
     save(incoming: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
     listVersions(workflowId: string): Promise<WorkflowVersion[]>;
@@ -55,6 +57,7 @@ export declare class SupabaseIntegrationRepository implements IIntegrationReposi
     private client;
     constructor(client: SupabaseClient);
     private mapRow;
+    private resolveProjectId;
     create(data: Omit<AppIntegration, 'id' | 'createdAt' | 'updatedAt'> & {
         secret?: string;
     }): Promise<AppIntegration>;

@@ -4,7 +4,16 @@
  * environment resolution (Netlify proxy, Render production URL, localhost).
  */
 
-import { Project, Workflow, Execution, ExecutionStep, AppIntegrationSafeResponse, TestConnectionResult } from '@relay/shared';
+import { 
+  Project, 
+  Workflow, 
+  Execution, 
+  ExecutionStep, 
+  AppIntegrationSafeResponse, 
+  TestConnectionResult,
+  sanitizeWorkflowGraph,
+  safeJsonStringify
+} from '@relay/shared';
 
 export interface DatabaseStatus {
   status: 'ready' | 'migration_required' | 'error';
@@ -40,18 +49,19 @@ export function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_URL) {
     return (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
   }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
+  }
   // If defined at build time
   // @ts-ignore
   if (typeof __API_URL__ !== 'undefined' && __API_URL__) {
     // @ts-ignore
     return (__API_URL__ as string).replace(/\/$/, '');
   }
-  // If running in browser on netlify or custom domain without local backend, fallback to Render URL
-  if (typeof window !== 'undefined') {
-    if (window.location.hostname.includes('netlify.app')) {
-      // Netlify proxy is configured, or can use direct URL if needed
-      return 'https://relay-api-bo0p.onrender.com';
-    }
+  // If running in browser on Netlify, use relative root '' to leverage Netlify's high-speed
+  // /api/* reverse-proxy rewrite defined in netlify.toml (bypasses browser CORS preflight completely)
+  if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
+    return '';
   }
   // Default to relative (for dev proxy or same-domain deployment)
   return '';
@@ -123,10 +133,20 @@ export const api = {
     return request<{ workflow: Workflow; _databaseNotice?: string }>(`/api/workflows/${id}`);
   },
 
+  async createWorkflow(data: { name: string; projectId?: string; graph?: any }): Promise<Workflow> {
+    const cleanGraph = data.graph ? sanitizeWorkflowGraph(data.graph) : { nodes: [], edges: [] };
+    const res = await request<{ workflow: Workflow }>('/api/workflows', {
+      method: 'POST',
+      body: safeJsonStringify({ ...data, graph: cleanGraph }),
+    });
+    return res.workflow;
+  },
+
   async saveWorkflow(id: string, graph: any, name: string, expectedRevision: number): Promise<{ workflow: Workflow }> {
+    const cleanGraph = sanitizeWorkflowGraph(graph);
     return request<{ workflow: Workflow }>(`/api/workflows/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ graph, name, expectedRevision }),
+      body: safeJsonStringify({ graph: cleanGraph, name, expectedRevision }),
     });
   },
 

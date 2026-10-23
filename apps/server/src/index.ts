@@ -5,6 +5,8 @@ import { createServer } from './server';
 import { setupSocketIO } from './sockets';
 import { getRepositories } from '@relay/database';
 
+import { isOriginAllowed } from './corsConfig';
+
 dotenv.config();
 
 const port = Number(process.env.PORT) || 4000;
@@ -16,8 +18,11 @@ const httpServer = http.createServer(app);
 
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || '*',
-    methods: ['GET', 'POST', 'PUT']
+    origin: (origin, callback) => {
+      callback(null, isOriginAllowed(origin));
+    },
+    methods: ['GET', 'POST', 'PUT'],
+    credentials: true
   }
 });
 

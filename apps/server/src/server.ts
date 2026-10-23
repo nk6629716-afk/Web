@@ -2,7 +2,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { getRepositories } from '@relay/database';
 import { runWorkflow, validateGraphForExecution } from '@relay/engine';
-import { SEEDED_SAMPLE_WORKFLOW } from '@relay/shared';
+import { SEEDED_SAMPLE_WORKFLOW, sanitizeWorkflowGraph } from '@relay/shared';
+import { corsOriginCallback } from './corsConfig';
 import { 
   createApiKeyRouter, 
   createWorkflowRunRouter,
@@ -20,10 +21,12 @@ export function createServer(
 ) {
   const app = express();
 
-  const allowedOrigin = process.env.FRONTEND_URL || '*';
   app.use(cors({
-    origin: allowedOrigin,
-    credentials: true
+    origin: corsOriginCallback,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Relay-Client', 'X-API-Key'],
+    optionsSuccessStatus: 204
   }));
   app.use(express.json());
 
@@ -163,6 +166,36 @@ export function createServer(
     }
   });
 
+  // POST /api/workflows (create new workflow)
+  app.post('/api/workflows', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { name, projectId, graph } = req.body;
+      const cleanGraph = graph ? sanitizeWorkflowGraph(graph) : { nodes: [], edges: [] };
+
+      let targetProjectId = projectId;
+      if (!targetProjectId || targetProjectId === 'demo-project-001') {
+        const projects = await repos.projects.list();
+        if (projects.length > 0) {
+          targetProjectId = projects[0].id;
+        } else {
+          const defaultProj = await repos.projects.create({ name: 'Default Workspace' });
+          targetProjectId = defaultProj.id;
+        }
+      }
+
+      const created = await repos.workflows.create({
+        id: (req.body.id as string) || undefined as any,
+        projectId: targetProjectId,
+        name: name || 'Untitled Workflow',
+        graph: cleanGraph
+      });
+
+      res.status(201).json({ workflow: created });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // PUT /api/workflows/:id (revision-checked save)
   app.put('/api/workflows/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -176,9 +209,12 @@ export function createServer(
         });
       }
 
+      // Explicitly sanitize graph to prevent cyclic structures and strip non-serializable fields
+      const cleanGraph = graph ? sanitizeWorkflowGraph(graph) : undefined;
+
       // Validate graph before saving
-      if (graph) {
-        const validation = validateGraphForExecution(graph);
+      if (cleanGraph) {
+        const validation = validateGraphForExecution(cleanGraph);
         if (!validation.valid) {
           return res.status(422).json({
             code: 'INVALID_GRAPH',
@@ -193,7 +229,7 @@ export function createServer(
         id,
         projectId: current?.projectId || 'demo-project-001',
         name: name || current?.name || 'Untitled Workflow',
-        graph: graph || current?.graph || { nodes: [], edges: [] },
+        graph: cleanGraph || current?.graph || { nodes: [], edges: [] },
         revision: expectedRevision,
         updatedAt: new Date().toISOString()
       };
