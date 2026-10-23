@@ -59,6 +59,8 @@ export interface StudioProps {
   activeProjectName?: string;
   onSelectProject?: (projectId: string, projectName: string) => void;
   onCreateProjectClick?: () => void;
+  userEmail?: string | null;
+  onLogout?: () => void;
 }
 
 export const Studio: React.FC<StudioProps> = ({
@@ -68,6 +70,8 @@ export const Studio: React.FC<StudioProps> = ({
   activeProjectName = 'Default Workspace',
   onSelectProject,
   onCreateProjectClick,
+  userEmail,
+  onLogout,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(SAMPLE_WORKFLOW);
   const [workflowTitle, setWorkflowTitle] = useState(SAMPLE_WORKFLOW.name);
@@ -703,6 +707,8 @@ export const Studio: React.FC<StudioProps> = ({
         onViewChange={onViewChange}
         projectName={activeProjectName}
         onCreateProjectClick={onCreateProjectClick}
+        userEmail={userEmail}
+        onLogout={onLogout}
       />
 
       {/* View 1: Studio Canvas & Workflow Builder */}

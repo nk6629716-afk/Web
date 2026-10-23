@@ -12,7 +12,9 @@ import {
   Save,
   Loader2,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import { Collaborator } from '@relay/shared';
 import { NeumoButton } from '../ui/NeumoButton';
@@ -38,6 +40,8 @@ interface HeaderProps {
   onViewChange?: (view: AppView) => void;
   projectName?: string;
   onCreateProjectClick?: () => void;
+  userEmail?: string | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,6 +62,8 @@ export const Header: React.FC<HeaderProps> = ({
   onViewChange,
   projectName = 'Default Workspace',
   onCreateProjectClick,
+  userEmail,
+  onLogout,
 }) => {
   return (
     <header className="h-16 bg-[#292b30] shadow-[0_4px_12px_rgba(0,0,0,0.35)] border-b border-white/[0.04] px-5 flex items-center justify-between z-30 select-none gap-4">
@@ -286,6 +292,32 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {isRunning ? 'EXECUTING...' : 'RUN WORKFLOW'}
         </NeumoButton>
+
+        {/* User Profile & Logout */}
+        {(userEmail || onLogout) && (
+          <div className="flex items-center gap-2 pl-2 border-l border-white/[0.06]">
+            {userEmail && (
+              <div 
+                title={`Logged in as ${userEmail}`}
+                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#24262b] text-[11px] font-mono text-slate-300 border border-white/[0.03] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]"
+              >
+                <UserIcon className="w-3.5 h-3.5 text-[#00bfff]" />
+                <span className="max-w-[130px] truncate">{userEmail}</span>
+              </div>
+            )}
+            {onLogout && (
+              <NeumoButton
+                onClick={onLogout}
+                size="sm"
+                variant="danger"
+                icon={<LogOut className="w-3.5 h-3.5 text-[#ff5580]" />}
+                title="Log out of Relay"
+              >
+                Log Out
+              </NeumoButton>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
