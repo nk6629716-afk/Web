@@ -242,9 +242,19 @@ export function createServer(
       }
 
       const current = await repos.workflows.getById(id);
+      let targetProjectId = current?.projectId || (req.body.projectId as string) || 'demo-project-001';
+      if (!targetProjectId || targetProjectId === 'demo-project-001') {
+        try {
+          const projects = await repos.projects.list();
+          if (projects && projects.length > 0) {
+            targetProjectId = projects[0].id;
+          }
+        } catch {}
+      }
+
       const incoming = {
         id,
-        projectId: current?.projectId || 'demo-project-001',
+        projectId: targetProjectId,
         name: name || current?.name || 'Untitled Workflow',
         graph: cleanGraph || current?.graph || { nodes: [], edges: [] },
         revision: expectedRevision,

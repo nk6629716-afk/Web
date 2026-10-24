@@ -11,9 +11,10 @@
     "dev:server": "npm --workspace=@relay/server run dev",
     "dev:web": "npm --workspace=@relay/web run dev",
     "build": "npm run build --workspaces",
-    "test": "npm --workspace=@relay/engine test && npm --workspace=@relay/server test",
+    "test": "npm --workspace=@relay/engine test && npm --workspace=@relay/server test && npm --workspace=@relay/web test",
     "test:engine": "npm --workspace=@relay/engine test",
-    "test:server": "npm --workspace=@relay/server test"
+    "test:server": "npm --workspace=@relay/server test",
+    "test:web": "npm --workspace=@relay/web test"
   },
   "keywords": [
     "relay",

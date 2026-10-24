@@ -5,7 +5,9 @@ export declare class InMemoryWorkflowRepository implements IWorkflowRepository {
     private versions;
     constructor();
     getById(id: string): Promise<Workflow | null>;
-    create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
+    create(data: Omit<Workflow, 'id' | 'revision' | 'updatedAt'> & {
+        id?: string;
+    }): Promise<Workflow>;
     save(incoming: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
     listVersions(workflowId: string): Promise<WorkflowVersion[]>;
     listByProject(projectId: string): Promise<Workflow[]>;

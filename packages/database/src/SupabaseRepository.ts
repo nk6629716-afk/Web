@@ -111,7 +111,7 @@ export class SupabaseWorkflowRepository implements IWorkflowRepository {
     return newProj ? newProj.id : '00000000-0000-0000-0000-000000000001';
   }
 
-  async create(data: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow> {
+  async create(data: Omit<Workflow, 'id' | 'revision' | 'updatedAt'> & { id?: string }): Promise<Workflow> {
     const targetProjectId = await this.resolveProjectId(data.projectId);
     const cleanGraph = sanitizeWorkflowGraph(data.graph);
 
@@ -156,6 +156,17 @@ export class SupabaseWorkflowRepository implements IWorkflowRepository {
   async save(incoming: Workflow, expectedRevision: number): Promise<SaveWorkflowResult> {
     const cleanGraph = sanitizeWorkflowGraph(incoming.graph);
 
+    // If incoming ID is not a valid UUID (e.g. demo template 'wf_demo_onboarding'),
+    // create a new workflow record with a real generated UUID in Supabase
+    if (!isUuid(incoming.id)) {
+      const created = await this.create({
+        ...incoming,
+        id: undefined,
+        graph: cleanGraph
+      });
+      return { success: true, workflow: created };
+    }
+
     // Optimistic lock update using revision check
     const { data: updated, error } = await this.client
       .from('workflows')
@@ -174,7 +185,7 @@ export class SupabaseWorkflowRepository implements IWorkflowRepository {
       // Conflict or record not found
       const current = await this.getById(incoming.id);
       if (!current) {
-        const created = await this.create({ ...incoming, graph: cleanGraph });
+        const created = await this.create({ ...incoming, id: incoming.id, graph: cleanGraph });
         return { success: true, workflow: created };
       }
       return {

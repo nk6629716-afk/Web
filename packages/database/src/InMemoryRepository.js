@@ -23,9 +23,11 @@ export class InMemoryWorkflowRepository {
         return JSON.parse(JSON.stringify(wf));
     }
     async create(data) {
+        const isTempId = data.id === 'wf_demo_onboarding';
+        const resolvedId = (!isTempId && data.id) ? data.id : crypto.randomUUID();
         const newWorkflow = {
             ...data,
-            id: data.id || `wf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            id: resolvedId,
             revision: 1,
             updatedAt: new Date().toISOString()
         };
@@ -42,10 +44,14 @@ export class InMemoryWorkflowRepository {
         return newWorkflow;
     }
     async save(incoming, expectedRevision) {
-        const current = this.workflows.get(incoming.id);
+        const isTempId = incoming.id === 'wf_demo_onboarding';
+        const current = !isTempId ? this.workflows.get(incoming.id) : null;
         if (!current) {
             // First save / insert
-            const created = await this.create(incoming);
+            const created = await this.create({
+                ...incoming,
+                id: isTempId ? undefined : incoming.id
+            });
             return { success: true, workflow: created };
         }
         // Monotonically increasing revision check (optimistic lock)

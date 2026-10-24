@@ -280,4 +280,127 @@ describe('Regression Tests: Production Bug Fixes (CORS, Cyclic Graph, Integratio
       expect(reloaded.revision).toBe(2);
     });
   });
+
+  describe('Bug 5: Save Workflow Button, Handler Invocation, and Real UUID Persistence on Reload', () => {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    it('creates a new workflow with a valid real UUID via POST /api/workflows', async () => {
+      const res = await fetch(`${baseUrl}/api/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Studio New Workflow',
+          projectId: 'demo-project-001',
+          graph: {
+            nodes: [{ id: 'node-trigger-1', type: 'trigger', position: { x: 100, y: 100 }, data: { label: 'Start Trigger' } }],
+            edges: []
+          }
+        })
+      });
+
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.workflow).toBeDefined();
+      expect(data.workflow.name).toBe('Studio New Workflow');
+      expect(data.workflow.revision).toBe(1);
+      expect(UUID_REGEX.test(data.workflow.id)).toBe(true);
+    });
+
+    it('saving initial workflow with temporary ID (wf_demo_onboarding) creates and retains real UUID', async () => {
+      const saveRes = await fetch(`${baseUrl}/api/workflows/wf_demo_onboarding`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Persisted Onboarding Flow',
+          expectedRevision: 1,
+          graph: {
+            nodes: [
+              { id: 'node-trigger-1', type: 'trigger', position: { x: 80, y: 180 }, data: { label: 'User Signup Webhook' } },
+              { id: 'node-transform-1', type: 'transform', position: { x: 380, y: 180 }, data: { label: 'Normalize Email', config: { operation: 'trim' } } }
+            ],
+            edges: [
+              { id: 'e-1', source: 'node-trigger-1', target: 'node-transform-1' }
+            ]
+          }
+        })
+      });
+
+      expect(saveRes.status).toBe(200);
+      const { workflow: saved } = await saveRes.json();
+      expect(saved).toBeDefined();
+      expect(saved.name).toBe('Persisted Onboarding Flow');
+      expect(saved.id).not.toBe('wf_demo_onboarding');
+      expect(UUID_REGEX.test(saved.id)).toBe(true);
+
+      // Re-hydrate after refresh using the newly assigned real UUID
+      const reloadRes = await fetch(`${baseUrl}/api/workflows/${saved.id}`);
+      expect(reloadRes.status).toBe(200);
+      const { workflow: reloaded } = await reloadRes.json();
+      expect(reloaded.id).toBe(saved.id);
+      expect(reloaded.name).toBe('Persisted Onboarding Flow');
+      expect(reloaded.graph.nodes).toHaveLength(2);
+    });
+
+    it('subsequent saves retain the same real UUID and increment revision', async () => {
+      // 1. Create initial
+      const createRes = await fetch(`${baseUrl}/api/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Lifecycle UUID Workflow',
+          graph: {
+            nodes: [{ id: 'node-trigger-1', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'Trigger' } }],
+            edges: []
+          }
+        })
+      });
+      const { workflow: created } = await createRes.json();
+      const realUuid = created.id;
+      expect(UUID_REGEX.test(realUuid)).toBe(true);
+
+      // 2. Save revision 1 -> 2
+      const saveRes = await fetch(`${baseUrl}/api/workflows/${realUuid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Lifecycle UUID Workflow (Rev 2)',
+          expectedRevision: 1,
+          graph: {
+            nodes: [
+              { id: 'node-trigger-1', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'Trigger' } },
+              { id: 'node-output-1', type: 'output', position: { x: 200, y: 0 }, data: { label: 'Output' } }
+            ],
+            edges: [{ id: 'e-1', source: 'node-trigger-1', target: 'node-output-1' }]
+          }
+        })
+      });
+      expect(saveRes.status).toBe(200);
+      const { workflow: saved } = await saveRes.json();
+      expect(saved.id).toBe(realUuid);
+      expect(saved.revision).toBe(2);
+
+      // 3. Reload after refresh using real UUID
+      const reloadRes = await fetch(`${baseUrl}/api/workflows/${realUuid}`);
+      expect(reloadRes.status).toBe(200);
+      const { workflow: reloaded } = await reloadRes.json();
+      expect(reloaded.id).toBe(realUuid);
+      expect(reloaded.revision).toBe(2);
+      expect(reloaded.name).toBe('Lifecycle UUID Workflow (Rev 2)');
+
+      // 4. Stale revision save returns conflict 409
+      const staleRes = await fetch(`${baseUrl}/api/workflows/${realUuid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Conflict Attempt',
+          expectedRevision: 1, // Stale!
+          graph: reloaded.graph
+        })
+      });
+      expect(staleRes.status).toBe(409);
+      const conflictData = await staleRes.json();
+      expect(conflictData.code).toBe('STALE_REVISION');
+    });
+  });
 });
+

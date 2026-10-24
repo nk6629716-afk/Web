@@ -8,7 +8,7 @@ export interface SaveWorkflowResult {
 
 export interface IWorkflowRepository {
   getById(id: string): Promise<Workflow | null>;
-  create(workflow: Omit<Workflow, 'revision' | 'updatedAt'>): Promise<Workflow>;
+  create(workflow: Omit<Workflow, 'id' | 'revision' | 'updatedAt'> & { id?: string }): Promise<Workflow>;
   save(workflow: Workflow, expectedRevision: number): Promise<SaveWorkflowResult>;
   listVersions(workflowId: string): Promise<WorkflowVersion[]>;
   listByProject(projectId: string): Promise<Workflow[]>;
