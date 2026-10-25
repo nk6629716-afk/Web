@@ -401,6 +401,74 @@ describe('Regression Tests: Production Bug Fixes (CORS, Cyclic Graph, Integratio
       const conflictData = await staleRes.json();
       expect(conflictData.code).toBe('STALE_REVISION');
     });
+
+    it('persists and restores node configurations accurately', async () => {
+      const createRes = await fetch(`${baseUrl}/api/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Config Verification Workflow',
+          graph: {
+            nodes: [
+              {
+                id: 'node-trigger-1',
+                type: 'trigger',
+                position: { x: 50, y: 150 },
+                data: {
+                  label: 'Order Webhook',
+                  config: { payload: { orderId: 'ORD-101', total: 99.5 } }
+                }
+              },
+              {
+                id: 'node-transform-1',
+                type: 'transform',
+                position: { x: 350, y: 150 },
+                data: {
+                  label: 'Format Total',
+                  config: { operation: 'uppercase', field: 'orderId', outputField: 'cleanOrderId' }
+                }
+              }
+            ],
+            edges: [
+              { id: 'e1', source: 'node-trigger-1', target: 'node-transform-1' }
+            ]
+          }
+        })
+      });
+
+      expect(createRes.status).toBe(201);
+      const { workflow: created } = await createRes.json();
+      expect(created.id).toBeDefined();
+
+      // Fetch by ID and verify config
+      const fetchRes = await fetch(`${baseUrl}/api/workflows/${created.id}`);
+      expect(fetchRes.status).toBe(200);
+      const { workflow: fetched } = await fetchRes.json();
+
+      const transformNode = fetched.graph.nodes.find((n: any) => n.id === 'node-transform-1');
+      expect(transformNode).toBeDefined();
+      expect(transformNode.data.config.operation).toBe('uppercase');
+      expect(transformNode.data.config.field).toBe('orderId');
+      expect(transformNode.data.config.outputField).toBe('cleanOrderId');
+    });
+
+    it('returns /api/auth/config endpoint successfully', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/config`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data).toHaveProperty('isConfigured');
+      expect(data).toHaveProperty('supabaseUrl');
+    });
+
+    it('returns 404 for unknown workflow IDs and SEEDED_SAMPLE_WORKFLOW for demo ID', async () => {
+      const notFoundRes = await fetch(`${baseUrl}/api/workflows/00000000-0000-0000-0000-000000000000`);
+      expect(notFoundRes.status).toBe(404);
+
+      const demoRes = await fetch(`${baseUrl}/api/workflows/wf_demo_onboarding`);
+      expect(demoRes.status).toBe(200);
+      const { workflow } = await demoRes.json();
+      expect(workflow).toBeDefined();
+    });
   });
 });
 

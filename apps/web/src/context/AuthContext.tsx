@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { authClient, isSupabaseConfigured } from '../lib/supabase';
 
+import { api } from '../lib/api';
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -18,46 +20,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isConfiguredState, setIsConfiguredState] = useState(isSupabaseConfigured);
 
   useEffect(() => {
     let isMounted = true;
-    let isInitialized = false;
+    let authSubscription: { unsubscribe: () => void } | null = null;
 
     async function initAuth() {
-      if (!isSupabaseConfigured) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-
       try {
-        const currentSession = await authClient.getSession();
-        if (isMounted) {
-          setSession(currentSession);
-          setUser(currentSession?.user || null);
+        if (!authClient.isConfigured) {
+          try {
+            const config = await api.getAuthConfig();
+            if (config.isConfigured && config.supabaseUrl && config.supabaseAnonKey) {
+              authClient.configure(config.supabaseUrl, config.supabaseAnonKey);
+              if (isMounted) setIsConfiguredState(true);
+            }
+          } catch {
+            // Ignore backend config error
+          }
+        }
+
+        if (authClient.isConfigured) {
+          const currentSession = await authClient.getSession();
+          if (isMounted) {
+            setSession(currentSession);
+            setUser(currentSession?.user || null);
+          }
+
+          authSubscription = authClient.onAuthStateChange((newSession, newUser) => {
+            if (isMounted) {
+              setSession(newSession);
+              setUser(newUser);
+              setLoading(false);
+            }
+          });
         }
       } catch (err) {
         console.error('Failed to initialize session:', err);
       } finally {
-        isInitialized = true;
         if (isMounted) setLoading(false);
       }
     }
 
     initAuth();
 
-    const { unsubscribe } = authClient.onAuthStateChange((newSession, newUser) => {
-      if (isMounted) {
-        setSession(newSession);
-        setUser(newUser);
-        if (isInitialized) {
-          setLoading(false);
-        }
-      }
-    });
-
     return () => {
       isMounted = false;
-      unsubscribe();
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -100,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         session,
         loading,
-        isConfigured: isSupabaseConfigured,
+        isConfigured: isConfiguredState,
         signIn,
         signUp,
         signOut,

@@ -10,7 +10,6 @@ describe('Header & Save Workflow Button Regression Tests', () => {
     revision: 1,
     isDirty: false,
     isRunning: false,
-    collaborators: [],
     onRun: vi.fn(),
     onResetSample: vi.fn(),
     onValidate: vi.fn(),
@@ -58,6 +57,44 @@ describe('Header & Save Workflow Button Regression Tests', () => {
   it('shows "Retry Save" status feedback when saveStatus is failed', () => {
     const html = renderToStaticMarkup(<Header {...defaultProps} saveStatus="failed" />);
     expect(html).toContain('Retry Save');
+  });
+
+  it('shows "Unsaved changes" when isDirty is true', () => {
+    const html = renderToStaticMarkup(<Header {...defaultProps} isDirty={true} />);
+    expect(html).toContain('Unsaved changes');
+  });
+
+  it('renders editable workflow name and revision badge directly next to Save Workflow', () => {
+    const html = renderToStaticMarkup(<Header {...defaultProps} workflowTitle="City Traffic Router" revision={4} />);
+    expect(html).toContain('value="City Traffic Router"');
+    expect(html).toContain('#4');
+    expect(html).toContain('data-testid="save-workflow-button"');
+  });
+
+  it('renders authenticated user profile button with email', () => {
+    const onLogout = vi.fn();
+    const html = renderToStaticMarkup(
+      <Header {...defaultProps} userEmail="engineer@relay.dev" onLogout={onLogout} />
+    );
+    expect(html).toContain('data-testid="user-profile-menu-button"');
+    expect(html).toContain('engineer');
+    expect(html).toContain('Supabase Auth');
+  });
+
+  it('clearly labels and distinguishes Demo Mode in user profile menu', () => {
+    const html = renderToStaticMarkup(
+      <Header {...defaultProps} userEmail="Demo Mode (Offline)" isDemoMode={true} />
+    );
+    expect(html).toContain('data-testid="user-profile-menu-button"');
+    expect(html).toContain('Demo Mode');
+    expect(html).toContain('Offline Demo');
+  });
+
+  it('does not display fake collaborator avatars', () => {
+    const html = renderToStaticMarkup(<Header {...defaultProps} />);
+    expect(html).not.toContain('Alex M.');
+    expect(html).not.toContain('Elena R.');
+    expect(html).not.toContain('David K.');
   });
 
   it('invokes the onSave handler when the button onClick handler is triggered', () => {

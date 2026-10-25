@@ -17,6 +17,7 @@ import {
   WorkflowNode,
   AppIntegrationSafeResponse,
   toWorkflowGraphDTO,
+  isUuid,
 } from '@relay/shared';
 import { SAMPLE_WORKFLOW } from '../lib/sampleWorkflow';
 import { executeWorkflow, validateGraph } from '../lib/localEngine';
@@ -61,6 +62,8 @@ export interface StudioProps {
   onSelectProject?: (projectId: string, projectName: string) => void;
   onCreateProjectClick?: () => void;
   userEmail?: string | null;
+  userDisplayName?: string | null;
+  isDemoMode?: boolean;
   onLogout?: () => void;
 }
 
@@ -72,6 +75,8 @@ export const Studio: React.FC<StudioProps> = ({
   onSelectProject,
   onCreateProjectClick,
   userEmail,
+  userDisplayName,
+  isDemoMode = false,
   onLogout,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(SAMPLE_WORKFLOW);
@@ -294,15 +299,40 @@ export const Studio: React.FC<StudioProps> = ({
       setSaveStatus('saving');
 
       try {
-        const res = await api.saveWorkflow(
-          workflow.id,
-          currentGraph,
-          workflowTitle,
-          targetRevision
-        );
+        let savedWf: Workflow;
 
-        if (res && res.workflow) {
-          const savedWf = res.workflow;
+        // If workflow is new or ID is not a valid UUID, create it first on backend
+        if (!isUuid(workflow.id)) {
+          savedWf = await api.createWorkflow({
+            name: workflowTitle,
+            projectId: activeProjectId,
+            graph: currentGraph,
+          });
+        } else {
+          try {
+            const res = await api.saveWorkflow(
+              workflow.id,
+              currentGraph,
+              workflowTitle,
+              targetRevision,
+              activeProjectId
+            );
+            savedWf = res.workflow;
+          } catch (saveErr: any) {
+            // If the record was not found in Supabase (404), create it and retain the new UUID
+            if (saveErr.status === 404 || saveErr.code === 'WORKFLOW_NOT_FOUND') {
+              savedWf = await api.createWorkflow({
+                name: workflowTitle,
+                projectId: activeProjectId,
+                graph: currentGraph,
+              });
+            } else {
+              throw saveErr;
+            }
+          }
+        }
+
+        if (savedWf) {
           setWorkflow(savedWf);
           setRevision(savedWf.revision);
           setWorkflowTitle(savedWf.name);
@@ -336,8 +366,20 @@ export const Studio: React.FC<StudioProps> = ({
         setIsSaving(false);
       }
     },
-    [isSaving, nodes, edges, revision, workflow.id, workflowTitle]
+    [isSaving, nodes, edges, revision, workflow.id, workflowTitle, activeProjectId]
   );
+
+  // Global keyboard shortcut: Ctrl+S / Cmd+S to save workflow
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveWorkflow();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSaveWorkflow]);
 
   // Conflict resolution handlers
   const handleAcceptServerConflict = useCallback(() => {
@@ -585,12 +627,13 @@ export const Studio: React.FC<StudioProps> = ({
         animated: false,
       }))
     );
+    setWorkflow(SAMPLE_WORKFLOW);
     setWorkflowTitle(SAMPLE_WORKFLOW.name);
-    setRevision((prev) => prev + 1);
-    setIsDirty(false);
+    setRevision(1);
+    setIsDirty(true);
     setExecution(null);
     setSelectedNodeId('node-transform-1');
-    showToast('info', 'Loaded seeded demo onboarding workflow.');
+    showToast('info', 'Loaded demo workflow template. Click Save Workflow to persist.');
   }, [setNodes, setEdges]);
 
   // Clear canvas
@@ -754,7 +797,6 @@ export const Studio: React.FC<StudioProps> = ({
         isSaving={isSaving}
         saveStatus={saveStatus}
         onSave={handleSaveWorkflow}
-        collaborators={INITIAL_COLLABORATORS}
         onRun={handleRun}
         onResetSample={handleResetSample}
         onValidate={handleValidate}
@@ -765,6 +807,8 @@ export const Studio: React.FC<StudioProps> = ({
         onCreateProjectClick={onCreateProjectClick}
         onCreateWorkflowClick={handleCreateWorkflow}
         userEmail={userEmail}
+        userDisplayName={userDisplayName}
+        isDemoMode={isDemoMode}
         onLogout={onLogout}
       />
 

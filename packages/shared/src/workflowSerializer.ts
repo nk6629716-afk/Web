@@ -120,6 +120,7 @@ export function toWorkflowGraphDTO(nodes: any[], edges: any[]): WorkflowGraph {
     const cleanData: WorkflowNode['data'] = {
       label: typeof rawData.label === 'string' && rawData.label.trim() ? rawData.label : `${type.toUpperCase()} Node`,
       type: type,
+      nodeType: type,
       config: cleanConfig,
     };
 

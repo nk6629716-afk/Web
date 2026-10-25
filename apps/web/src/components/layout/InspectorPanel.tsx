@@ -41,7 +41,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-[#00bfff]" />
             <span className="text-xs font-mono font-bold tracking-wider uppercase text-slate-200">
-              GRAPH TELEMETRY
+              Workflow overview
             </span>
           </div>
           <StatusLED status="idle" size="sm" />
@@ -51,13 +51,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         <div className="mt-5 space-y-4">
           <div className="p-3.5 rounded-xl bg-[#292b30] border border-white/[0.03] shadow-[4px_4px_8px_rgba(0,0,0,0.4),-4px_-4px_8px_rgba(255,255,255,0.08)] space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-mono text-[11px]">ACTIVE NODES</span>
+              <span className="text-slate-400 font-mono text-[11px]">Workflow steps</span>
               <span className="font-mono font-bold text-[#00bfff] px-2 py-0.5 rounded bg-[#24262b] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
                 {totalNodes}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-mono text-[11px]">CONNECTIONS</span>
+              <span className="text-slate-400 font-mono text-[11px]">Connections</span>
               <span className="font-mono font-bold text-[#00ff88] px-2 py-0.5 rounded bg-[#24262b] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)]">
                 {totalEdges}
               </span>
@@ -67,10 +67,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <div className="p-4 rounded-xl bg-[#24262b] shadow-[inset_3px_3px_6px_rgba(0,0,0,0.5),inset_-3px_-3px_6px_rgba(255,255,255,0.06)] border border-white/[0.02] space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
               <Cpu className="w-3.5 h-3.5 text-[#00bfff]" />
-              <span>Tactile Controls</span>
+              <span>Node settings</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Select any node on the canvas to configure properties or inspect real execution metrics and input/output payloads.
+              Select any step on the canvas to configure properties or inspect execution outputs.
             </p>
           </div>
         </div>
@@ -141,7 +141,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             }`}
           >
             <Settings className="w-3 h-3 text-[#00bfff]" />
-            <span>CONFIG</span>
+            <span>Settings</span>
           </button>
           <button
             onClick={() => setActiveTab('execution')}
@@ -152,7 +152,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             }`}
           >
             <Terminal className="w-3 h-3 text-[#00ff88]" />
-            <span>EXECUTION</span>
+            <span>Execution</span>
             {selectedStepResult && (
               <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-ping" />
             )}
@@ -173,7 +173,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {/* Type Specific Fields */}
             {type === 'trigger' && (
               <NeumoTextarea
-                label="Simulated Payload (JSON)"
+                label="Trigger Payload (JSON)"
                 rows={7}
                 value={
                   typeof config.payload === 'string'

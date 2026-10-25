@@ -11,6 +11,8 @@ export interface ValidationResult {
     warnings: string[];
     issues: ValidationIssue[];
 }
+export declare const UUID_REGEX: RegExp;
+export declare function isUuid(id: unknown): id is string;
 export declare const SUPPORTED_NODE_TYPES: NodeType[];
 export declare const SUPPORTED_TRANSFORM_OPS: TransformOp[];
 export declare const SUPPORTED_CONDITION_OPS: ConditionOp[];

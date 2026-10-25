@@ -98,6 +98,7 @@ export function toWorkflowGraphDTO(nodes, edges) {
         const cleanData = {
             label: typeof rawData.label === 'string' && rawData.label.trim() ? rawData.label : `${type.toUpperCase()} Node`,
             type: type,
+            nodeType: type,
             config: cleanConfig,
         };
         // Preserve status if valid

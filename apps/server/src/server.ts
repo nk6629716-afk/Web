@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { getRepositories } from '@relay/database';
 import { runWorkflow, validateGraphForExecution } from '@relay/engine';
-import { SEEDED_SAMPLE_WORKFLOW, sanitizeWorkflowGraph } from '@relay/shared';
+import { SEEDED_SAMPLE_WORKFLOW, sanitizeWorkflowGraph, isUuid } from '@relay/shared';
 import { corsOriginCallback } from './corsConfig';
 import { 
   createApiKeyRouter, 
@@ -54,6 +54,15 @@ export function createServer(
       service: 'relay-api',
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.round(process.uptime())
+    });
+  });
+
+  // GET /api/auth/config (returns public Supabase auth configuration for client hydration)
+  app.get('/api/auth/config', (req: Request, res: Response) => {
+    res.json({
+      supabaseUrl: process.env.SUPABASE_URL || null,
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null,
+      isConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
     });
   });
 
@@ -157,20 +166,9 @@ export function createServer(
         throw err;
       }
 
-      // If workflow not found and a demo/default id was requested,
-      // load the latest project workflow or seed once
+      // If workflow not found and a demo/default id was requested, return seeded sample workflow
       if (!workflow && (id === SEEDED_SAMPLE_WORKFLOW.id || id === 'wf_demo_onboarding')) {
-        try {
-          const existingList = await repos.workflows.listByProject('demo-project-001');
-          if (existingList.length > 0) {
-            workflow = existingList[0];
-          } else {
-            workflow = await repos.workflows.create(SEEDED_SAMPLE_WORKFLOW);
-          }
-        } catch (seedErr) {
-          console.warn('Could not retrieve or persist seeded workflow into database:', seedErr);
-          workflow = SEEDED_SAMPLE_WORKFLOW;
-        }
+        workflow = SEEDED_SAMPLE_WORKFLOW;
       }
 
       if (!workflow) {
@@ -241,8 +239,8 @@ export function createServer(
         }
       }
 
-      const current = await repos.workflows.getById(id);
-      let targetProjectId = current?.projectId || (req.body.projectId as string) || 'demo-project-001';
+      const current = isUuid(id) ? await repos.workflows.getById(id) : null;
+      let targetProjectId = (req.body.projectId as string) || current?.projectId || 'demo-project-001';
       if (!targetProjectId || targetProjectId === 'demo-project-001') {
         try {
           const projects = await repos.projects.list();

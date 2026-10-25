@@ -73,8 +73,10 @@ const RelayDashboard: React.FC = () => {
     return <AuthPage onBypassDemo={handleBypassDemo} />;
   }
 
-  // 3. Authenticated: redirect to existing Relay dashboard with full Phase C features
-  const displayUserEmail = user?.email || (demoBypass ? 'developer (offline demo)' : null);
+  // 3. Authenticated or Demo Mode
+  const isDemoMode = !isAuthenticated && demoBypass;
+  const displayUserEmail = user?.email || (isDemoMode ? 'Demo Mode (Offline)' : null);
+  const displayUserName = (user?.user_metadata?.display_name as string) || (user?.user_metadata?.full_name as string) || null;
 
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
@@ -98,6 +100,8 @@ const RelayDashboard: React.FC = () => {
         }}
         onCreateProjectClick={() => setIsCreateModalOpen(true)}
         userEmail={displayUserEmail}
+        userDisplayName={displayUserName}
+        isDemoMode={isDemoMode}
         onLogout={handleLogout}
       />
 

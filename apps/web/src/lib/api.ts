@@ -148,11 +148,16 @@ export const api = {
     return res.workflow;
   },
 
-  async saveWorkflow(id: string, graph: any, name: string, expectedRevision: number): Promise<{ workflow: Workflow }> {
+  // Auth configuration from backend
+  async getAuthConfig(): Promise<{ supabaseUrl: string | null; supabaseAnonKey: string | null; isConfigured: boolean }> {
+    return request<{ supabaseUrl: string | null; supabaseAnonKey: string | null; isConfigured: boolean }>('/api/auth/config');
+  },
+
+  async saveWorkflow(id: string, graph: any, name: string, expectedRevision: number, projectId?: string): Promise<{ workflow: Workflow }> {
     const cleanGraph = sanitizeWorkflowGraph(graph);
     return request<{ workflow: Workflow }>(`/api/workflows/${id}`, {
       method: 'PUT',
-      body: safeJsonStringify({ graph: cleanGraph, name, expectedRevision }),
+      body: safeJsonStringify({ graph: cleanGraph, name, expectedRevision, projectId }),
     });
   },
 

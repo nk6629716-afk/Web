@@ -11,8 +11,12 @@ export const isSupabaseConfigured = Boolean(
   !supabaseAnonKey.includes('your-supabase-anon-key')
 );
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabaseAnonKey!, {
+let dynamicClient: SupabaseClient | null = null;
+
+export function getSupabase(): SupabaseClient | null {
+  if (dynamicClient) return dynamicClient;
+  if (isSupabaseConfigured && !dynamicClient) {
+    dynamicClient = createClient(supabaseUrl!, supabaseAnonKey!, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -20,8 +24,12 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         storageKey: 'relay_supabase_session',
       },
-    })
-  : null;
+    });
+  }
+  return dynamicClient;
+}
+
+export const supabase: SupabaseClient | null = isSupabaseConfigured ? getSupabase() : null;
 
 export interface AuthState {
   user: User | null;
@@ -34,9 +42,25 @@ export const authClient = {
   isConfigured: isSupabaseConfigured,
   supabaseUrl: supabaseUrl || null,
 
+  configure(url: string, anonKey: string): SupabaseClient {
+    dynamicClient = createClient(url, anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storageKey: 'relay_supabase_session',
+      },
+    });
+    this.isConfigured = true;
+    this.supabaseUrl = url;
+    return dynamicClient;
+  },
+
   async getSession(): Promise<Session | null> {
-    if (!supabase) return null;
-    const { data, error } = await supabase.auth.getSession();
+    const client = getSupabase();
+    if (!client) return null;
+    const { data, error } = await client.auth.getSession();
     if (error) {
       console.warn('Error fetching Supabase session:', error.message);
       return null;
@@ -45,19 +69,21 @@ export const authClient = {
   },
 
   async getUser(): Promise<User | null> {
-    if (!supabase) return null;
-    const { data, error } = await supabase.auth.getUser();
+    const client = getSupabase();
+    if (!client) return null;
+    const { data, error } = await client.auth.getUser();
     if (error) return null;
     return data.user;
   },
 
   async signUp(email: string, password: string, displayName?: string) {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       throw new Error(
         'Supabase Auth is not configured. Missing VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
       );
     }
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await client.auth.signUp({
       email,
       password,
       options: {
@@ -71,12 +97,13 @@ export const authClient = {
   },
 
   async signIn(email: string, password: string) {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       throw new Error(
         'Supabase Auth is not configured. Missing VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
       );
     }
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await client.auth.signInWithPassword({
       email,
       password,
     });
@@ -85,16 +112,25 @@ export const authClient = {
   },
 
   async signOut() {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    const client = getSupabase();
+    if (!client) return;
+    try {
+      await client.auth.signOut();
+    } catch (err: any) {
+      console.warn('Supabase signOut error:', err?.message);
+    }
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('relay_supabase_session');
+      window.localStorage.removeItem('relay:demo_bypass');
+    }
   },
 
   onAuthStateChange(callback: (session: Session | null, user: User | null) => void) {
-    if (!supabase) {
+    const client = getSupabase();
+    if (!client) {
       return { unsubscribe: () => {} };
     }
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       callback(session, session?.user || null);
     });
     return {

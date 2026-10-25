@@ -20,36 +20,36 @@ interface PaletteModule {
 const MODULES: PaletteModule[] = [
   {
     type: 'trigger',
-    title: 'Trigger Module',
-    category: 'ENTRY POINT',
-    description: 'Manual or webhook execution origin with simulated JSON payload.',
+    title: 'Trigger',
+    category: 'TRIGGER',
+    description: 'Starts workflow execution with manual or webhook payload.',
     icon: Zap,
     accentColor: 'text-[#00ff88]',
     ledMode: 'success',
   },
   {
     type: 'transform',
-    title: 'Transform Module',
-    category: 'DATA PROCESSING',
-    description: 'String trim, lowercase, uppercase, or template variable substitution.',
+    title: 'Transform',
+    category: 'TRANSFORM',
+    description: 'Format text, modify fields, or interpolate template variables.',
     icon: Cpu,
     accentColor: 'text-[#8b5cf6]',
     ledMode: 'cyan',
   },
   {
     type: 'condition',
-    title: 'Condition Module',
-    category: 'BRANCH LOGIC',
-    description: 'Binary decision logic with dual True and False tactile routing ports.',
+    title: 'Condition',
+    category: 'CONDITION',
+    description: 'Route execution along True or False branch paths based on rules.',
     icon: GitBranch,
     accentColor: 'text-[#ffaa00]',
     ledMode: 'idle',
   },
   {
     type: 'output',
-    title: 'Output Terminal',
-    category: 'DESTINATION',
-    description: 'Final execution terminal displaying aggregated payload and alerts.',
+    title: 'Output',
+    category: 'OUTPUT',
+    description: 'Collect final results, responses, or dispatch alerts.',
     icon: Send,
     accentColor: 'text-[#00bfff]',
     ledMode: 'cyan',
@@ -68,7 +68,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
       <div className="p-4 border-b border-white/[0.04] bg-[#292b30]">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-300">
-            MODULE LIBRARY
+            Modules
           </span>
           <StatusLED status="cyan" size="sm" />
         </div>

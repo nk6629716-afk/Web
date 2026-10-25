@@ -49,7 +49,7 @@ export const ExecutionConsole: React.FC<ExecutionConsoleProps> = ({
         <div className="flex items-center gap-3">
           <Terminal className="w-4 h-4 text-[#00bfff]" />
           <span className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">
-            EXECUTION TELEMETRY
+            Execution details
           </span>
 
           <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-[#24262b] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] border border-white/[0.03]">
