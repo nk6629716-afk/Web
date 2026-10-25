@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   LogOut,
   User as UserIcon,
-  ChevronDown
+  ChevronDown,
+  Users
 } from 'lucide-react';
 import { Collaborator } from '@relay/shared';
 import { NeumoButton } from '../ui/NeumoButton';
@@ -29,6 +30,7 @@ interface HeaderProps {
   isDirty: boolean;
   isRunning: boolean;
   collaborators?: Collaborator[];
+  isRealtimeConnected?: boolean;
   onRun: () => void;
   onResetSample: () => void;
   onValidate: () => void;
@@ -53,6 +55,8 @@ export const Header: React.FC<HeaderProps> = ({
   revision,
   isDirty,
   isRunning,
+  collaborators = [],
+  isRealtimeConnected = true,
   onRun,
   onResetSample,
   onValidate,
@@ -71,13 +75,18 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isPresenceDropdownOpen, setIsPresenceDropdownOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const presenceMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close profile dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
+      }
+      if (presenceMenuRef.current && !presenceMenuRef.current.contains(event.target as Node)) {
+        setIsPresenceDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -271,6 +280,139 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[11px] font-mono font-medium text-slate-300 whitespace-nowrap">
                 {saveStatusText}
               </span>
+            </div>
+
+            {/* Live Realtime Collaborator Presence */}
+            <div className="relative shrink-0" ref={presenceMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsPresenceDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-[#24262b] shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] border border-white/[0.04] hover:border-white/[0.1] transition-all text-xs select-none"
+                title={
+                  collaborators.length === 0
+                    ? 'You are the only person here'
+                    : `${collaborators.length + 1} collaborating: You and ${collaborators.map((c) => c.name || c.displayName || 'Peer').join(', ')}`
+                }
+                data-testid="collaborator-presence-button"
+                aria-label="Collaborator Presence"
+              >
+                {/* Live Connection LED */}
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    isRealtimeConnected
+                      ? 'bg-[#00ff88] shadow-[0_0_8px_#00ff88]'
+                      : 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
+                  }`}
+                  title={isRealtimeConnected ? 'Realtime Connected' : 'Connecting to Realtime'}
+                />
+
+                {/* Overlapping Initials Badges */}
+                {collaborators.length > 0 && (
+                  <div className="flex items-center -space-x-1.5 overflow-hidden">
+                    {collaborators.slice(0, 3).map((collab, idx) => {
+                      const name = collab.name || collab.displayName || 'Peer';
+                      const initials = name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2);
+                      return (
+                        <div
+                          key={collab.id || collab.userId || idx}
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-[#24262b] shadow-sm shrink-0"
+                          style={{ backgroundColor: collab.color || '#00bfff' }}
+                          title={`${name} (${collab.status || 'viewing'})`}
+                        >
+                          {initials}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Presence Count Label */}
+                <span className="text-[11px] font-medium text-slate-300 hidden md:inline whitespace-nowrap">
+                  {collaborators.length === 0
+                    ? 'Only you here'
+                    : `${collaborators.length + 1} collaborating`}
+                </span>
+
+                <Users className="w-3.5 h-3.5 text-slate-400 ml-0.5 shrink-0" />
+              </button>
+
+              {/* Collaborator Details Dropdown */}
+              {isPresenceDropdownOpen && (
+                <div 
+                  className="absolute left-0 mt-1.5 w-64 bg-[#292b30] border border-white/[0.08] shadow-[0_10px_25px_rgba(0,0,0,0.6)] rounded-xl p-3 z-50 text-xs space-y-2"
+                  data-testid="collaborators-dropdown"
+                >
+                  <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.04]">
+                    <span className="font-semibold text-slate-200">Collaborators</span>
+                    <span className="text-[10px] font-mono text-[#00ff88] flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
+                      {isRealtimeConnected ? 'Live' : 'Connecting'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {/* Current User */}
+                    <div className="flex items-center justify-between py-1 px-1.5 rounded bg-white/[0.03]">
+                      <div className="flex items-center gap-2 truncate">
+                        <div className="w-5 h-5 rounded-full bg-[#00bfff] flex items-center justify-center text-[9px] font-bold text-white shrink-0">
+                          You
+                        </div>
+                        <span className="text-slate-200 font-medium truncate">
+                          {userDisplayName || (isDemoMode ? 'Offline Guest' : 'You')}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {isSaving ? 'Saving…' : isDirty ? 'Editing' : 'Active'}
+                      </span>
+                    </div>
+
+                    {/* Remote Collaborators */}
+                    {collaborators.map((collab, i) => {
+                      const name = collab.name || collab.displayName || 'Peer';
+                      const initials = name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2);
+                      return (
+                        <div
+                          key={collab.id || collab.userId || i}
+                          className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-white/[0.02]"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <div
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                              style={{ backgroundColor: collab.color || '#34d399' }}
+                            >
+                              {initials}
+                            </div>
+                            <div className="truncate">
+                              <div className="text-slate-200 font-medium truncate">{name}</div>
+                              {collab.email && (
+                                <div className="text-[9px] text-slate-400 truncate">{collab.email}</div>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[10px] capitalize text-[#00ff88] font-mono shrink-0">
+                            {collab.status || 'Viewing'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1.5 border-t border-white/[0.04] text-[10px] text-slate-400 flex items-center justify-between">
+                    <span>Scoped to workflow</span>
+                    <span>{collaborators.length + 1} online</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

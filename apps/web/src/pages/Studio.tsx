@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlowProvider,
   useNodesState,
@@ -18,10 +18,12 @@ import {
   AppIntegrationSafeResponse,
   toWorkflowGraphDTO,
   isUuid,
+  SEEDED_SAMPLE_WORKFLOW,
 } from '@relay/shared';
+import { io, Socket } from 'socket.io-client';
 import { SAMPLE_WORKFLOW } from '../lib/sampleWorkflow';
 import { executeWorkflow, validateGraph } from '../lib/localEngine';
-import { api } from '../lib/api';
+import { api, getSocketBaseUrl } from '../lib/api';
 import { Header, AppView } from '../components/layout/Header';
 import { ConflictModal } from '../components/ConflictModal';
 import { ProjectsView } from '../components/ProjectsView';
@@ -33,27 +35,6 @@ import { ExecutionConsole } from '../components/ExecutionConsole';
 import { StatusLED } from '../components/ui/StatusLED';
 import { X, Loader2 } from 'lucide-react';
 
-const INITIAL_COLLABORATORS: Collaborator[] = [
-  {
-    userId: 'u_1',
-    displayName: 'Alex M.',
-    color: '#00bfff',
-    lastActive: new Date().toISOString(),
-  },
-  {
-    userId: 'u_2',
-    displayName: 'Elena R.',
-    color: '#8b5cf6',
-    lastActive: new Date().toISOString(),
-  },
-  {
-    userId: 'u_3',
-    displayName: 'David K.',
-    color: '#00ff88',
-    lastActive: new Date().toISOString(),
-  },
-];
-
 export interface StudioProps {
   currentView?: AppView;
   onViewChange?: (view: AppView) => void;
@@ -61,6 +42,7 @@ export interface StudioProps {
   activeProjectName?: string;
   onSelectProject?: (projectId: string, projectName: string) => void;
   onCreateProjectClick?: () => void;
+  userId?: string;
   userEmail?: string | null;
   userDisplayName?: string | null;
   isDemoMode?: boolean;
@@ -70,10 +52,11 @@ export interface StudioProps {
 export const Studio: React.FC<StudioProps> = ({
   currentView = 'studio',
   onViewChange,
-  activeProjectId = 'demo-project-001',
+  activeProjectId = '123fd611-4dd1-494f-99b2-ae2dbc748a47',
   activeProjectName = 'Default Workspace',
   onSelectProject,
   onCreateProjectClick,
+  userId,
   userEmail,
   userDisplayName,
   isDemoMode = false,
@@ -93,6 +76,20 @@ export const Studio: React.FC<StudioProps> = ({
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(
     null
   );
+
+  // Real-time multi-user collaboration state & refs
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
+  const socketRef = useRef<Socket | null>(null);
+  const isRemoteUpdateRef = useRef<boolean>(false);
+  const currentUserIdRef = useRef<string>(userId || `user-${Math.random().toString(36).substring(2, 7)}`);
+  const broadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (userId) {
+      currentUserIdRef.current = userId;
+    }
+  }, [userId]);
 
   // Initialize React Flow nodes & edges
   const initialNodes: Node[] = useMemo(() => {
@@ -141,90 +138,328 @@ export const Studio: React.FC<StudioProps> = ({
     }, 5000);
   };
 
-  // Determine initial workflow ID from URL query param or localStorage
-  const getInitialWorkflowId = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const fromUrl = urlParams.get('workflowId');
-      if (fromUrl) return fromUrl;
-      const fromStorage = localStorage.getItem('relay:active_workflow_id');
-      if (fromStorage) return fromStorage;
-    }
-    return workflow.id;
-  }, [workflow.id]);
+  // Socket.IO lifecycle & Real-Time Presence & Broadcast
+  useEffect(() => {
+    const socketUrl = getSocketBaseUrl();
+    const socket: Socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+    socketRef.current = socket;
 
-  // Load workflow from backend on mount or when switching active workflow
-  const loadWorkflow = useCallback(async (targetId?: string) => {
-    setIsLoadingWorkflow(true);
-    const resolvedId = targetId || getInitialWorkflowId();
-    try {
-      let wf: Workflow | null = null;
-      try {
-        const res = await api.getWorkflow(resolvedId);
-        if (res && res.workflow) {
-          wf = res.workflow;
-        }
-      } catch (getErr) {
-        // If not found or demo ID, try loading project workflows from backend
-        try {
-          const list = await api.getWorkflows(activeProjectId);
-          if (list && list.length > 0) {
-            wf = list[0];
-          }
-        } catch {}
+    socket.on('connect', () => {
+      setIsRealtimeConnected(true);
+      if (workflow.id) {
+        socket.emit('room:join', {
+          workflowId: workflow.id,
+          user: {
+            id: currentUserIdRef.current,
+            name: userDisplayName || (isDemoMode ? 'Offline Guest' : userEmail ? userEmail.split('@')[0] : 'Collaborator'),
+            displayName: userDisplayName || undefined,
+            email: userEmail || undefined,
+          },
+        });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      setIsRealtimeConnected(false);
+    });
+
+    socket.on('presence:update', (payload: { collaborators: Collaborator[] }) => {
+      // Exclude own user session so collaborators represents actual OTHER peers in this workflow
+      const others = (payload.collaborators || []).filter(
+        (c) => c.id !== currentUserIdRef.current && c.userId !== currentUserIdRef.current && c.id !== socket.id
+      );
+      setCollaborators(others);
+    });
+
+    socket.on('workflow:updated', (payload: { workflow: Workflow; updatedBy?: string }) => {
+      if (!payload.workflow || payload.workflow.id !== workflow.id) return;
+
+      // If local uncommitted dirty edits exist, do not overwrite silently: trigger conflict
+      if (isDirty) {
+        setConflictWorkflow(payload.workflow);
+        showToast('error', `Conflict: ${payload.updatedBy || 'A collaborator'} saved revision #${payload.workflow.revision}. Please review.`);
+        return;
       }
 
-      if (wf) {
-        setWorkflow(wf);
-        setWorkflowTitle(wf.name);
-        setRevision(wf.revision);
+      // Smoothly adopt accepted remote change
+      isRemoteUpdateRef.current = true;
+      setWorkflow(payload.workflow);
+      setWorkflowTitle(payload.workflow.name);
+      setRevision(payload.workflow.revision);
 
-        setNodes(
-          (wf.graph?.nodes || []).map((n) => ({
-            id: n.id,
-            type: n.type,
-            position: n.position,
-            data: n.data,
-          }))
-        );
+      setNodes(
+        (payload.workflow.graph?.nodes || []).map((n) => ({
+          id: n.id,
+          type: n.type,
+          position: n.position,
+          data: n.data,
+        }))
+      );
 
-        setEdges(
-          (wf.graph?.edges || []).map((e) => ({
-            id: e.id,
-            type: 'neon',
-            source: e.source,
-            target: e.target,
-            sourceHandle: e.sourceHandle,
-            targetHandle: e.targetHandle,
-            label: e.label,
-            animated: false,
-          }))
-        );
+      setEdges(
+        (payload.workflow.graph?.edges || []).map((e) => ({
+          id: e.id,
+          type: 'neon',
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          label: e.label,
+          animated: false,
+        }))
+      );
 
-        setIsDirty(false);
+      setIsDirty(false);
+      setSaveStatus('saved');
+      showToast('info', `${payload.updatedBy || 'A collaborator'} updated workflow (rev #${payload.workflow.revision}).`);
+      setTimeout(() => {
+        isRemoteUpdateRef.current = false;
         setSaveStatus('idle');
-        setConflictWorkflow(null);
+      }, 500);
+    });
 
-        // Persist active workflow ID to localStorage and synchronize URL query param
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('relay:active_workflow_id', wf.id);
-          const currentUrl = new URL(window.location.href);
-          if (currentUrl.searchParams.get('workflowId') !== wf.id) {
-            currentUrl.searchParams.set('workflowId', wf.id);
-            window.history.replaceState(null, '', currentUrl.toString());
+    socket.on('workflow:sync', (payload: { workflow: Workflow }) => {
+      if (payload.workflow && payload.workflow.id === workflow.id) {
+        setWorkflow(payload.workflow);
+        setRevision(payload.workflow.revision);
+        setWorkflowTitle(payload.workflow.name);
+        setIsDirty(false);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2500);
+      }
+    });
+
+    socket.on('error', (payload: any) => {
+      if (payload.code === 'STALE_REVISION' && payload.canonicalWorkflow) {
+        setConflictWorkflow(payload.canonicalWorkflow);
+        showToast('error', 'Stale update rejected: another collaborator updated this workflow.');
+        setSaveStatus('failed');
+      } else {
+        console.warn('Realtime Socket error:', payload);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // Synchronize room membership whenever active workflow changes
+  useEffect(() => {
+    if (socketRef.current && socketRef.current.connected && workflow.id) {
+      socketRef.current.emit('room:join', {
+        workflowId: workflow.id,
+        user: {
+          id: currentUserIdRef.current,
+          name: userDisplayName || (isDemoMode ? 'Offline Guest' : userEmail ? userEmail.split('@')[0] : 'Collaborator'),
+          displayName: userDisplayName || undefined,
+          email: userEmail || undefined,
+        },
+      });
+    }
+  }, [workflow.id, userDisplayName, userEmail, isDemoMode]);
+
+  // Synchronize selection presence to peers
+  useEffect(() => {
+    if (socketRef.current && socketRef.current.connected && workflow.id) {
+      socketRef.current.emit('presence:select', {
+        workflowId: workflow.id,
+        userId: currentUserIdRef.current,
+        nodeId: selectedNodeId || undefined,
+      });
+    }
+  }, [selectedNodeId, workflow.id]);
+
+  // Synchronize active editing status to peers
+  useEffect(() => {
+    if (socketRef.current && socketRef.current.connected && workflow.id) {
+      socketRef.current.emit('presence:status', {
+        workflowId: workflow.id,
+        status: isSaving ? 'saving' : isDirty ? 'editing' : 'viewing',
+      });
+    }
+  }, [isSaving, isDirty, workflow.id]);
+
+  // PRIORITY 1: Reliable workflow initialization & recovery
+  const loadWorkflow = useCallback(
+    async (targetId?: string) => {
+      setIsLoadingWorkflow(true);
+      try {
+        let wf: Workflow | null = null;
+        let isRealDbWorkflow = false;
+
+        // 1. If a valid workflowId exists in targetId or URL, load that workflow
+        let candidateId = targetId;
+        if (!candidateId && typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const fromUrl = urlParams.get('workflowId');
+          if (fromUrl && isUuid(fromUrl)) {
+            candidateId = fromUrl;
           }
         }
+
+        if (candidateId && isUuid(candidateId)) {
+          try {
+            const res = await api.getWorkflow(candidateId);
+            if (res && res.workflow && isUuid(res.workflow.id)) {
+              wf = res.workflow;
+              isRealDbWorkflow = true;
+            }
+          } catch (err: any) {
+            console.warn(`Workflow ${candidateId} could not be loaded, recovering:`, err?.message);
+          }
+        }
+
+        // 2. Otherwise, restore the last valid workflow ID if it belongs to the active project
+        if (!wf && typeof window !== 'undefined') {
+          const storedId = localStorage.getItem('relay:active_workflow_id');
+          if (storedId && isUuid(storedId)) {
+            try {
+              const res = await api.getWorkflow(storedId);
+              if (res && res.workflow && isUuid(res.workflow.id)) {
+                if (!activeProjectId || !isUuid(activeProjectId) || res.workflow.projectId === activeProjectId) {
+                  wf = res.workflow;
+                  isRealDbWorkflow = true;
+                }
+              }
+            } catch {
+              localStorage.removeItem('relay:active_workflow_id');
+            }
+          }
+        }
+
+        // 3. If no valid saved workflow loaded, query active project workflows
+        if (!wf) {
+          try {
+            const list = await api.getWorkflows(activeProjectId);
+            if (list && list.length > 0) {
+              const validWf = list.find((item) => isUuid(item.id)) || list[0];
+              if (validWf) {
+                wf = validWf;
+                isRealDbWorkflow = isUuid(validWf.id);
+              }
+            }
+          } catch (err: any) {
+            console.warn('Could not list workflows for active project:', err?.message);
+          }
+        }
+
+        // 4. If active project has no workflows, initialize default demo workflow in Supabase with a real UUID
+        if (!wf) {
+          try {
+            const created = await api.createWorkflow({
+              name: SEEDED_SAMPLE_WORKFLOW.name,
+              projectId: activeProjectId,
+              graph: SEEDED_SAMPLE_WORKFLOW.graph,
+            });
+            if (created && isUuid(created.id)) {
+              wf = created;
+              isRealDbWorkflow = true;
+            }
+          } catch (createErr: any) {
+            console.warn('Could not initialize default workflow in database (offline fallback):', createErr?.message);
+            // 5. Offline demo fallback only when backend/database is unreachable
+            wf = {
+              ...SEEDED_SAMPLE_WORKFLOW,
+              id: 'demo-offline',
+            };
+            isRealDbWorkflow = false;
+          }
+        }
+
+        if (wf) {
+          setWorkflow(wf);
+          setWorkflowTitle(wf.name);
+          setRevision(wf.revision);
+
+          setNodes(
+            (wf.graph?.nodes || []).map((n) => ({
+              id: n.id,
+              type: n.type,
+              position: n.position,
+              data: n.data,
+            }))
+          );
+
+          setEdges(
+            (wf.graph?.edges || []).map((e) => ({
+              id: e.id,
+              type: 'neon',
+              source: e.source,
+              target: e.target,
+              sourceHandle: e.sourceHandle,
+              targetHandle: e.targetHandle,
+              label: e.label,
+              animated: false,
+            }))
+          );
+
+          setIsDirty(false);
+          setSaveStatus(isRealDbWorkflow ? 'saved' : 'idle');
+          setConflictWorkflow(null);
+
+          // 7. Keep React state, URL parameters, local storage consistent
+          if (typeof window !== 'undefined') {
+            if (isRealDbWorkflow && isUuid(wf.id)) {
+              localStorage.setItem('relay:active_workflow_id', wf.id);
+              const currentUrl = new URL(window.location.href);
+              if (currentUrl.searchParams.get('workflowId') !== wf.id) {
+                currentUrl.searchParams.set('workflowId', wf.id);
+                window.history.replaceState(null, '', currentUrl.toString());
+              }
+            } else {
+              localStorage.removeItem('relay:active_workflow_id');
+              const currentUrl = new URL(window.location.href);
+              if (currentUrl.searchParams.has('workflowId')) {
+                currentUrl.searchParams.delete('workflowId');
+                window.history.replaceState(null, '', currentUrl.toString());
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('Workflow initialization failed:', err);
+      } finally {
+        setIsLoadingWorkflow(false);
       }
-    } catch (err: any) {
-      console.warn('Backend unavailable on initial load, using default demo workflow:', err?.message);
-    } finally {
-      setIsLoadingWorkflow(false);
-    }
-  }, [activeProjectId, getInitialWorkflowId, setNodes, setEdges]);
+    },
+    [activeProjectId, setNodes, setEdges]
+  );
 
   useEffect(() => {
     loadWorkflow();
-  }, []);
+  }, [activeProjectId]);
+
+  // Debounced broadcast helper for canvas changes
+  const scheduleBroadcastGraph = useCallback(
+    (customNodes?: Node[], customEdges?: Edge[]) => {
+      if (isRemoteUpdateRef.current) return;
+      if (!socketRef.current || !socketRef.current.connected) return;
+      if (!workflow.id || !isUuid(workflow.id)) return;
+
+      if (broadcastTimeoutRef.current) {
+        clearTimeout(broadcastTimeoutRef.current);
+      }
+
+      broadcastTimeoutRef.current = setTimeout(() => {
+        const targetNodes = customNodes || nodes;
+        const targetEdges = customEdges || edges;
+        const currentGraph = toWorkflowGraphDTO(targetNodes, targetEdges);
+        socketRef.current?.emit('workflow:update', {
+          workflowId: workflow.id,
+          expectedRevision: revision,
+          graph: currentGraph,
+          name: workflowTitle,
+          updatedBy: userDisplayName || (userEmail ? userEmail.split('@')[0] : 'Collaborator'),
+        });
+      }, 500);
+    },
+    [workflow.id, revision, nodes, edges, workflowTitle, userDisplayName, userEmail]
+  );
 
   // Create new workflow action
   const handleCreateWorkflow = useCallback(async () => {
@@ -348,6 +583,17 @@ export const Studio: React.FC<StudioProps> = ({
             window.history.replaceState(null, '', currentUrl.toString());
           }
 
+          // Broadcast saved update to Socket.IO room so active peers receive it
+          if (socketRef.current && socketRef.current.connected) {
+            socketRef.current.emit('workflow:update', {
+              workflowId: savedWf.id,
+              expectedRevision: targetRevision,
+              graph: currentGraph,
+              name: workflowTitle,
+              updatedBy: userDisplayName || (userEmail ? userEmail.split('@')[0] : 'Collaborator'),
+            });
+          }
+
           showToast('success', `Workflow "${savedWf.name}" saved (rev #${savedWf.revision})!`);
           setTimeout(() => {
             setSaveStatus((curr) => (curr === 'saved' ? 'idle' : curr));
@@ -366,7 +612,7 @@ export const Studio: React.FC<StudioProps> = ({
         setIsSaving(false);
       }
     },
-    [isSaving, nodes, edges, revision, workflow.id, workflowTitle, activeProjectId]
+    [isSaving, nodes, edges, revision, workflow.id, workflowTitle, activeProjectId, userDisplayName, userEmail]
   );
 
   // Global keyboard shortcut: Ctrl+S / Cmd+S to save workflow
@@ -420,7 +666,7 @@ export const Studio: React.FC<StudioProps> = ({
     handleSaveWorkflow(serverRev);
   }, [conflictWorkflow, handleSaveWorkflow]);
 
-  // Track node / edge changes to dirty state
+  // Track node / edge changes to dirty state and broadcast
   const handleNodesChange = useCallback(
     (changes: any) => {
       onNodesChange(changes);
@@ -428,9 +674,10 @@ export const Studio: React.FC<StudioProps> = ({
       const isRemoval = changes.some((c: any) => c.type === 'remove');
       if (isDragStop || isRemoval) {
         setIsDirty(true);
+        scheduleBroadcastGraph();
       }
     },
-    [onNodesChange]
+    [onNodesChange, scheduleBroadcastGraph]
   );
 
   const handleEdgesChange = useCallback(
@@ -438,9 +685,10 @@ export const Studio: React.FC<StudioProps> = ({
       onEdgesChange(changes);
       if (changes.some((c: any) => c.type === 'remove')) {
         setIsDirty(true);
+        scheduleBroadcastGraph();
       }
     },
-    [onEdgesChange]
+    [onEdgesChange, scheduleBroadcastGraph]
   );
 
   // Node selection
@@ -471,9 +719,13 @@ export const Studio: React.FC<StudioProps> = ({
         animated: false,
       };
 
-      setEdges((eds) => addEdge(newEdge, eds));
+      setEdges((eds) => {
+        const nextEds = addEdge(newEdge, eds);
+        scheduleBroadcastGraph(nodes, nextEds);
+        return nextEds;
+      });
     },
-    [setEdges]
+    [setEdges, nodes, scheduleBroadcastGraph]
   );
 
   const getDefaultConfig = (type: NodeType): Record<string, any> => {
@@ -526,11 +778,15 @@ export const Studio: React.FC<StudioProps> = ({
         },
       };
 
-      setNodes((nds) => [...nds, newNode]);
+      setNodes((nds) => {
+        const nextNds = [...nds, newNode];
+        scheduleBroadcastGraph(nextNds, edges);
+        return nextNds;
+      });
       setSelectedNodeId(newNodeId);
       showToast('info', `Added new ${type} module to canvas.`);
     },
-    [setNodes]
+    [setNodes, edges, scheduleBroadcastGraph]
   );
 
   // Add node on drop
@@ -551,18 +807,22 @@ export const Studio: React.FC<StudioProps> = ({
         },
       };
 
-      setNodes((nds) => [...nds, newNode]);
+      setNodes((nds) => {
+        const nextNds = [...nds, newNode];
+        scheduleBroadcastGraph(nextNds, edges);
+        return nextNds;
+      });
       setSelectedNodeId(newNodeId);
     },
-    [setNodes]
+    [setNodes, edges, scheduleBroadcastGraph]
   );
 
   // Update node data (label or config)
   const handleUpdateNodeData = useCallback(
     (nodeId: string, updatedData: Partial<WorkflowNode['data']>) => {
       setIsDirty(true);
-      setNodes((nds) =>
-        nds.map((n) => {
+      setNodes((nds) => {
+        const nextNds = nds.map((n) => {
           if (n.id === nodeId) {
             return {
               ...n,
@@ -573,24 +833,31 @@ export const Studio: React.FC<StudioProps> = ({
             };
           }
           return n;
-        })
-      );
+        });
+        scheduleBroadcastGraph(nextNds, edges);
+        return nextNds;
+      });
     },
-    [setNodes]
+    [setNodes, edges, scheduleBroadcastGraph]
   );
 
   // Delete node
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
       setIsDirty(true);
-      setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+      setNodes((nds) => {
+        const nextNds = nds.filter((n) => n.id !== nodeId);
+        const nextEds = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+        scheduleBroadcastGraph(nextNds, nextEds);
+        return nextNds;
+      });
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
       if (selectedNodeId === nodeId) {
         setSelectedNodeId(null);
       }
       showToast('info', `Deleted module "${nodeId}".`);
     },
-    [selectedNodeId, setNodes, setEdges]
+    [selectedNodeId, setNodes, setEdges, edges, scheduleBroadcastGraph]
   );
 
   // Validate graph action
@@ -796,6 +1063,8 @@ export const Studio: React.FC<StudioProps> = ({
         isRunning={isRunning}
         isSaving={isSaving}
         saveStatus={saveStatus}
+        collaborators={collaborators}
+        isRealtimeConnected={isRealtimeConnected}
         onSave={handleSaveWorkflow}
         onRun={handleRun}
         onResetSample={handleResetSample}

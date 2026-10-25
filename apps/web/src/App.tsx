@@ -19,8 +19,20 @@ const RelayDashboard: React.FC = () => {
   });
 
   const [currentView, setCurrentView] = useState<AppView>('studio');
-  const [activeProjectId, setActiveProjectId] = useState<string>('demo-project-001');
-  const [activeProjectName, setActiveProjectName] = useState<string>('Default Workspace');
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('relay:active_project_id');
+      if (stored) return stored;
+    }
+    return '123fd611-4dd1-494f-99b2-ae2dbc748a47';
+  });
+  const [activeProjectName, setActiveProjectName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const storedName = localStorage.getItem('relay:active_project_name');
+      if (storedName) return storedName;
+    }
+    return 'Default Workspace';
+  });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   React.useEffect(() => {
@@ -28,8 +40,16 @@ const RelayDashboard: React.FC = () => {
       try {
         const projects = await api.getProjects();
         if (projects && projects.length > 0) {
-          setActiveProjectId(projects[0].id);
-          setActiveProjectName(projects[0].name);
+          // If stored project is valid, retain it; otherwise select the first project
+          const currentValid = projects.find((p) => p.id === activeProjectId);
+          if (currentValid) {
+            setActiveProjectName(currentValid.name);
+          } else {
+            setActiveProjectId(projects[0].id);
+            setActiveProjectName(projects[0].name);
+            localStorage.setItem('relay:active_project_id', projects[0].id);
+            localStorage.setItem('relay:active_project_name', projects[0].name);
+          }
         }
       } catch {
         // Fallback to initial
@@ -41,6 +61,10 @@ const RelayDashboard: React.FC = () => {
   const handleProjectCreated = (newProject: Project) => {
     setActiveProjectId(newProject.id);
     setActiveProjectName(newProject.name);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('relay:active_project_id', newProject.id);
+      localStorage.setItem('relay:active_project_name', newProject.name);
+    }
     setCurrentView('studio');
   };
 
@@ -76,7 +100,8 @@ const RelayDashboard: React.FC = () => {
   // 3. Authenticated or Demo Mode
   const isDemoMode = !isAuthenticated && demoBypass;
   const displayUserEmail = user?.email || (isDemoMode ? 'Demo Mode (Offline)' : null);
-  const displayUserName = (user?.user_metadata?.display_name as string) || (user?.user_metadata?.full_name as string) || null;
+  const displayUserName = (user?.user_metadata?.display_name as string) || (user?.user_metadata?.full_name as string) || (user?.email ? user.email.split('@')[0] : null);
+  const currentUserId = user?.id || (isDemoMode ? 'guest-offline' : undefined);
 
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
@@ -96,9 +121,14 @@ const RelayDashboard: React.FC = () => {
         onSelectProject={(id, name) => {
           setActiveProjectId(id);
           setActiveProjectName(name);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('relay:active_project_id', id);
+            localStorage.setItem('relay:active_project_name', name);
+          }
           setCurrentView('studio');
         }}
         onCreateProjectClick={() => setIsCreateModalOpen(true)}
+        userId={currentUserId}
         userEmail={displayUserEmail}
         userDisplayName={displayUserName}
         isDemoMode={isDemoMode}

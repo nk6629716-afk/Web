@@ -178,12 +178,14 @@ export interface Collaborator {
   userId?: string;
   name?: string;
   displayName?: string;
+  email?: string;
   color: string;
   avatarUrl?: string;
   lastActiveAt?: number;
   lastActive?: string;
   activeNodeId?: string | null;
   selectedNodeId?: string;
+  status?: 'viewing' | 'editing' | 'saving';
 }
 
 export type ApiKeyScope = 

@@ -6,6 +6,7 @@ export interface RoomJoinPayload {
         userId?: string;
         name?: string;
         displayName?: string;
+        email?: string;
         avatarUrl?: string;
     };
 }

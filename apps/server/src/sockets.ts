@@ -4,7 +4,8 @@ import {
   ExecutionStep, 
   RoomJoinPayload, 
   WorkflowUpdatePayload,
-  SEEDED_SAMPLE_WORKFLOW
+  SEEDED_SAMPLE_WORKFLOW,
+  isUuid
 } from '@relay/shared';
 import { IRepositories } from '@relay/database';
 import { runWorkflow, validateGraphForExecution } from '@relay/engine';
@@ -28,16 +29,30 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
     // 1. Join room
     socket.on('room:join', async (payload: RoomJoinPayload) => {
       const { workflowId, user } = payload;
+
+      // If socket was already in a different workflow room, clean up previous room presence
+      const prevSession = sessions.get(socket.id);
+      if (prevSession && prevSession.workflowId !== workflowId) {
+        socket.leave(prevSession.workflowId);
+        sessions.delete(socket.id);
+        io.to(prevSession.workflowId).emit('presence:update', {
+          collaborators: getCollaboratorsInRoom(prevSession.workflowId)
+        });
+      }
+
       socket.join(workflowId);
 
       const colors = ['#38bdf8', '#34d399', '#f472b6', '#fbbf24', '#a78bfa', '#fb923c'];
       const userColor = colors[Math.floor(Math.random() * colors.length)];
 
       const collaborator: Collaborator = {
-        id: user.id || socket.id,
-        name: user.name || 'Anonymous Peer',
+        id: user.id || user.userId || socket.id,
+        name: user.name || user.displayName || 'Anonymous Peer',
+        displayName: user.displayName || user.name,
+        email: user.email,
         color: userColor,
         avatarUrl: user.avatarUrl,
+        status: 'viewing',
         lastActiveAt: Date.now()
       };
 
@@ -63,9 +78,21 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
       });
     });
 
+    // 1b. Leave room explicitly
+    socket.on('room:leave', (payload: { workflowId: string }) => {
+      const session = sessions.get(socket.id);
+      if (session && session.workflowId === payload.workflowId) {
+        socket.leave(payload.workflowId);
+        sessions.delete(socket.id);
+        io.to(payload.workflowId).emit('presence:update', {
+          collaborators: getCollaboratorsInRoom(payload.workflowId)
+        });
+      }
+    });
+
     // 2. Workflow updates with optimistic revision check
     socket.on('workflow:update', async (payload: WorkflowUpdatePayload) => {
-      const { workflowId, expectedRevision, graph, updatedBy } = payload;
+      const { workflowId, expectedRevision, graph, name, updatedBy } = payload;
 
       // Validate graph
       const validation = validateGraphForExecution(graph);
@@ -78,7 +105,24 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
         return;
       }
 
-      const current = await repos.workflows.getById(workflowId);
+      let current = await repos.workflows.getById(workflowId);
+      if (!current) {
+        if (workflowId === SEEDED_SAMPLE_WORKFLOW.id || !isUuid(workflowId)) {
+          let targetProjectId = 'demo-project-001';
+          try {
+            const projects = await repos.projects.list();
+            if (projects && projects.length > 0) {
+              targetProjectId = projects[0].id;
+            }
+          } catch {}
+          current = await repos.workflows.create({
+            projectId: targetProjectId,
+            name: name || SEEDED_SAMPLE_WORKFLOW.name,
+            graph
+          });
+        }
+      }
+
       if (!current) {
         socket.emit('error', {
           code: 'WORKFLOW_NOT_FOUND',
@@ -89,6 +133,7 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
 
       const result = await repos.workflows.save({
         ...current,
+        name: name || current.name,
         graph
       }, expectedRevision);
 
@@ -102,10 +147,17 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
         return;
       }
 
+      // Update sender collaborator status
+      const session = sessions.get(socket.id);
+      if (session) {
+        session.collaborator.status = 'editing';
+        session.collaborator.lastActiveAt = Date.now();
+      }
+
       // Broadcast accepted change to all other peers in the room
       socket.to(workflowId).emit('workflow:updated', {
         workflow: result.workflow,
-        updatedBy
+        updatedBy: updatedBy || session?.collaborator?.name || 'A collaborator'
       });
 
       // Confirm back to sender
@@ -119,6 +171,18 @@ export function setupSocketIO(io: SocketIOServer, repos: IRepositories) {
       const session = sessions.get(socket.id);
       if (session) {
         session.collaborator.selectedNodeId = payload.nodeId;
+        session.collaborator.lastActiveAt = Date.now();
+        io.to(payload.workflowId).emit('presence:update', {
+          collaborators: getCollaboratorsInRoom(payload.workflowId)
+        });
+      }
+    });
+
+    // 3b. Collaborator status change (viewing / editing / saving)
+    socket.on('presence:status', (payload: { workflowId: string; status: 'viewing' | 'editing' | 'saving' }) => {
+      const session = sessions.get(socket.id);
+      if (session && session.workflowId === payload.workflowId) {
+        session.collaborator.status = payload.status;
         session.collaborator.lastActiveAt = Date.now();
         io.to(payload.workflowId).emit('presence:update', {
           collaborators: getCollaboratorsInRoom(payload.workflowId)

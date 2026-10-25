@@ -122,7 +122,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({ onAddNode }) => {
       <div className="p-3 m-3 rounded-xl bg-[#25272c] shadow-[inset_2px_2px_5px_rgba(0,0,0,0.5),inset_-2px_-2px_5px_rgba(255,255,255,0.05)] border border-white/[0.02] text-[10px] text-slate-400 flex items-start gap-2">
         <Info className="w-3.5 h-3.5 text-[#00bfff] shrink-0 mt-0.5" />
         <span>
-          Connect tactile ports to link modules. Select a node to configure parameters in the right panel.
+          Connect ports to link modules. Select a node to configure parameters in the right panel.
         </span>
       </div>
     </aside>

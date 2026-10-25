@@ -104,4 +104,36 @@ describe('Header & Save Workflow Button Regression Tests', () => {
     element.props.onSave();
     expect(onSave).toHaveBeenCalledTimes(1);
   });
+
+  it('renders live collaborator presence with "Only you here" when no other collaborators are connected', () => {
+    const html = renderToStaticMarkup(<Header {...defaultProps} collaborators={[]} isRealtimeConnected={true} />);
+    expect(html).toContain('data-testid="collaborator-presence-button"');
+    expect(html).toContain('Only you here');
+    expect(html).toContain('bg-[#00ff88]');
+  });
+
+  it('renders live collaborator presence count and real user initials when other collaborators are present', () => {
+    const mockCollaborators = [
+      {
+        id: 'user-2',
+        name: 'Sarah Connor',
+        displayName: 'Sarah Connor',
+        email: 'sarah@skynet.com',
+        color: '#ff4444',
+        status: 'editing' as const,
+      },
+    ];
+    const html = renderToStaticMarkup(
+      <Header {...defaultProps} collaborators={mockCollaborators} isRealtimeConnected={true} />
+    );
+    expect(html).toContain('data-testid="collaborator-presence-button"');
+    expect(html).toContain('2 collaborating');
+    expect(html).toContain('SC'); // Sarah Connor initials
+  });
+
+  it('displays amber indicator when realtime connection is offline or reconnecting', () => {
+    const html = renderToStaticMarkup(<Header {...defaultProps} isRealtimeConnected={false} />);
+    expect(html).toContain('bg-amber-400');
+  });
 });
+

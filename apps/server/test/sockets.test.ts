@@ -132,4 +132,42 @@ describe('Relay Backend Realtime Socket.IO Integration Tests', () => {
     expect(completion.executionId).toBeDefined();
     expect(events.length).toBeGreaterThan(0);
   });
+
+  it('updates collaborator status when presence:status is emitted', async () => {
+    const presencePromise = new Promise<any>((resolve) => {
+      client2.on('presence:update', (payload) => {
+        const peer1 = payload.collaborators.find((c: any) => c.id === 'peer-1');
+        if (peer1 && peer1.status === 'editing') {
+          resolve(peer1);
+        }
+      });
+    });
+
+    client1.emit('presence:status', {
+      workflowId: SEEDED_SAMPLE_WORKFLOW.id,
+      status: 'editing',
+    });
+
+    const updatedPeer = await presencePromise;
+    expect(updatedPeer.status).toBe('editing');
+  });
+
+  it('removes collaborator presence when client leaves room or disconnects', async () => {
+    const leavePromise = new Promise<any>((resolve) => {
+      client2.on('presence:update', (payload) => {
+        const hasPeer1 = payload.collaborators.some((c: any) => c.id === 'peer-1');
+        if (!hasPeer1) {
+          resolve(payload);
+        }
+      });
+    });
+
+    client1.emit('room:leave', {
+      workflowId: SEEDED_SAMPLE_WORKFLOW.id,
+    });
+
+    const leavePayload = await leavePromise;
+    expect(leavePayload.collaborators.some((c: any) => c.id === 'peer-1')).toBe(false);
+  });
 });
+

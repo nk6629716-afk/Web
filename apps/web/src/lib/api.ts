@@ -67,6 +67,23 @@ export function getApiBaseUrl(): string {
   return '';
 }
 
+export function getSocketBaseUrl(): string {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return (import.meta.env.VITE_SOCKET_URL as string).replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    // Netlify Edge redirects do not proxy bidirectional WebSockets, connect directly to Render backend
+    if (window.location.hostname.includes('netlify.app')) {
+      return 'https://relay-api-bo0p.onrender.com';
+    }
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:4000';
+    }
+    return window.location.origin;
+  }
+  return 'https://relay-api-bo0p.onrender.com';
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
